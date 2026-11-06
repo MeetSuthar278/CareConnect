@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}My Requests{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <h1>My Requests</h1>
+    <a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>
+</div>
+
+<!-- Filter by status -->
+<form method="get" action="{{ url_for('my_requests') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
+    <div>
+        <label for="status" class="form-label">Status</label>
+        <select id="status" name="status" class="form-select">
+            <option value="">All</option>
+            {% for s in request_statuses %}
+                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn-outline">Filter</button>
+</form>
+
+{% if requests %}
+    <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Reference</th>
+                    <th>Service</th>
+                    <th>Priority</th>
+                    <th>Organization</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                    <tr>
+                        <td>{{ r.reference }}</td>
+                        <td>{{ r.service_name }}</td>
+                        <td>{{ priority_deadline(r) }}</td>
+                        <td>{{ r.org_name or 'Not assigned yet' }}</td>
+                        <td>{{ status_label(r.status) }}</td>
+                        <td>{{ r.created_at }}</td>
+                        <td><a href="{{ url_for('request_details', request_id=r.request_id) }}">View</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="note-box">No requests found.</div>
+{% endif %}
+
+{% endblock %}
