@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}Request Sent{% endblock %}
+
+{% block content %}
+
+<div class="form-box" id="request-confirmation" data-request-id="{{ req.request_id }}" data-status-url="{{ status_url }}">
+
+    <h1 class="mb-4">Request submitted</h1>
+
+    <div class="box mb-3">
+        <p class="box-small mb-1">Reference number</p>
+        <p class="reference-number mb-3">{{ req.reference }}</p>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>Service</dt>
+                <dd>{{ req.service_name }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Priority</dt>
+                <dd>{{ priority_deadline(req) }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Status</dt>
+                <dd id="request-status">{{ status_label(req.status) }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Contact name</dt>
+                <dd>{{ req.contact_name }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {% if session.get('role') == 'individual' %}
+        <a href="{{ url_for('my_requests') }}" class="btn-main">Go to My Requests</a>
+    {% else %}
+        <div class="note-box mb-3">
+            Save your reference number.
+        </div>
+        <a href="{{ url_for('signup') }}" class="btn-main">Create an account</a>
+        <a href="{{ url_for('home') }}" class="btn-outline">Back to home</a>
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/request-confirmation.js') }}" defer></script>
+{% endblock %}

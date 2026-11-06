@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <div>
+        <h1>Hello, {{ session.get('name') }}</h1>
+    </div>
+    <a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>
+</div>
+
+<!-- Numbers -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4">
+        <div class="box">
+            <p class="stat-number">{{ active_count }}</p>
+            <p class="stat-label">Active requests</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <div class="box">
+            <p class="stat-number">{{ completed_count }}</p>
+            <p class="stat-label">Completed requests</p>
+        </div>
+    </div>
+</div>
+
+<!-- Latest requests -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="mb-0">Latest requests</h2>
+    <a href="{{ url_for('my_requests') }}">See all</a>
+</div>
+
+{% if requests %}
+    <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Reference</th>
+                    <th>Service</th>
+                    <th>Priority / deadline</th><th>Status</th>
+                    <th>Date</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                    <tr>
+                        <td>{{ r.reference }}</td>
+                        <td>{{ r.service_name }}</td>
+                        <td>{{ priority_deadline(r) }}</td><td>{{ status_label(r.status) }}</td>
+                        <td>{{ r.created_at }}</td>
+                        <td><a href="{{ url_for('request_details', request_id=r.request_id) }}">View</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="note-box">You have no requests yet. Click <strong>Get Connected</strong> to send your first one.</div>
+{% endif %}
+
+{% endblock %}
