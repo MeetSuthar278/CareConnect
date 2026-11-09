@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.env.*
+!.env.example
+*firebase-adminsdk*.json
+*service-account*.json
+deploy/secrets/
+migration_backups/
