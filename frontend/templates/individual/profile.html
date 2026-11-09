@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+
+<div class="form-box-wide">
+
+    <h1 class="mb-4">My Profile</h1>
+
+    <!-- Personal details -->
+    <div class="box mb-4">
+        <h3 class="mb-3">Personal details</h3>
+
+        <form method="post" action="{{ url_for('profile') }}">
+            <input type="hidden" name="form_type" value="details">
+            <input type="hidden" name="csrf_token" value="{{ member_csrf }}">
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label for="full_name" class="form-label">Full name</label>
+                    <input type="text" id="full_name" name="full_name" class="form-control" value="{{ user.full_name }}" required>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" id="email" class="form-control" value="{{ user.email }}" readonly>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="phone" class="form-label">Phone number</label>
+                    <input type="tel" pattern="[+0-9\(\) .\-]{7,25}" title="Enter a phone number with 7 to 15 digits." autocomplete="tel" id="phone" name="phone" class="form-control" value="{{ user.phone }}" required>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="city" class="form-label">City</label>
+                    <input type="text" id="city" name="city" class="form-control" value="{{ user.city }}" required>
+                </div>
+                <div class="col-12">
+                    <label for="address" class="form-label">Address</label>
+                    <input type="text" id="address" name="address" class="form-control" value="{{ user.address }}" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-main mt-3">Save Changes</button>
+        </form>
+    </div>
+
+    <!-- Change password -->
+    <div class="box">
+        <h3 class="mb-3">Change password</h3>
+
+        <form id="password-change-form" method="post" action="{{ url_for('profile') }}" data-context-url="{{ url_for('member.password_context') }}">
+            <input type="hidden" name="form_type" value="password">
+            <input type="hidden" name="csrf_token" value="{{ member_csrf }}">
+
+            <div class="mb-3">
+                <label for="old_password" class="form-label">Current password</label>
+                <input type="password" id="old_password" class="form-control" autocomplete="current-password" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">New password</label>
+                <input type="password" id="password" class="form-control" autocomplete="new-password" minlength="6" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="confirm_password" class="form-label">Confirm new password</label>
+                <input type="password" id="confirm_password" class="form-control" autocomplete="new-password" required>
+            </div>
+
+            <button type="submit" class="btn-main">Change password</button>
+        </form>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script id="firebase-web-config" type="application/json">{{ firebase_web_config | tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/password-change.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}Get Connected{% endblock %}
+
+{% block content %}
+
+{#
+    ONE form for both logged in individuals and guests.
+    - Logged in: Flask sends "user" for a read-only contact summary.
+                 The preview copies saved contact details at submission.
+    - Guest:     "user" is empty, so the person types everything every time.
+#}
+{% set logged_in = session.get('role') == 'individual' %}
+
+<div class="form-box-wide">
+
+    <h1 class="mb-4">Get Connected</h1>
+
+    {% if not logged_in %}
+        <p class="mb-4"><a href="{{ url_for('login') }}">Log in to use saved contact details</a></p>
+    {% endif %}
+
+    <form id="team-request-form" method="post" action="{{ url_for('member.submit_request') if logged_in else url_for('requests.submit_guest_request') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="submission_nonce" value="{{ submission_nonce }}">
+
+        <!-- Part 1: What support -->
+        <div class="box mb-3">
+            <h3 class="mb-3">1. What do you need?</h3>
+
+            <div class="mb-3">
+                <label for="service_id" class="form-label">Service</label>
+                <select id="service_id" name="service_id" class="form-select" required>
+                    <option value="">Choose a service</option>
+                    {% for s in services %}
+                        <option value="{{ s.service_id }}" data-delivery="{{ s.delivery_methods | tojson | forceescape }}" data-area="{{ s.area }}" {% if s.service_id == selected_service_id %}selected{% endif %}>
+                            {{ s.service_name }} ({{ s.category }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-md-6">
+                    <label for="priority" class="form-label">How urgent is it?</label>
+                    <select id="priority" name="priority" class="form-select" required>
+                        {% for label, hours in priority_hours.items() %}
+                            <option data-hours="{{ hours }}" value="{{ label }}" {% if request.form.get('priority', 'Medium') == label %}selected{% endif %}>{{ label }} &middot; {{ hours }} hours</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-hint" id="priority_help"></div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label for="delivery_method" class="form-label">Preferred delivery</label>
+                    <select id="delivery_method" name="delivery_method" class="form-select" data-selected="{{ request.form.get('delivery_method', '') }}" required>
+                        <option value="">Choose a service first</option>
+                    </select>
+                    <noscript><p class="form-hint">Enable JavaScript to select a supported delivery method.</p></noscript>
+                </div>
+            </div>
+            <p class="form-hint" id="service_area" aria-live="polite"></p>
+
+            <div>
+                <label for="details" class="form-label">Request description</label>
+                <textarea id="details" name="details" class="form-control" rows="3" required
+                          placeholder="Tell the organization what support you need">{{ request.form.get('details', '') }}</textarea>
+            </div>
+        </div>
+
+        <!-- Part 2: Contact details -->
+        <div class="box mb-3">
+            <h3 class="mb-3">2. Your contact details</h3>
+
+            {% if logged_in and user %}
+                <p><a href="{{ url_for('profile') }}">Edit contact details</a></p>
+                <dl class="detail-list">
+                    <div class="detail-row"><dt>Name</dt><dd>{{ user.full_name }}</dd></div>
+                    <div class="detail-row"><dt>Email</dt><dd>{{ user.email }}</dd></div>
+                    <div class="detail-row"><dt>Phone</dt><dd>{{ user.phone }}</dd></div>
+                    <div class="detail-row"><dt>Location</dt><dd>{{ user.address }}, {{ user.city }}</dd></div>
+                </dl>
+            {% else %}
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label for="contact_name" class="form-label">Full name</label>
+                    <input type="text" id="contact_name" name="contact_name" class="form-control"
+                           value="{{ request.form.get('contact_name', '') }}"
+                           required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label for="contact_phone" class="form-label">Phone number</label>
+                    <input type="tel" pattern="[+0-9\(\) .\-]{7,25}" title="Enter a phone number with 7 to 15 digits." autocomplete="tel" id="contact_phone" name="contact_phone" class="form-control"
+                           value="{{ request.form.get('contact_phone', '') }}"
+                           required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label for="contact_email" class="form-label">Email</label>
+                    <input type="email" id="contact_email" name="contact_email" class="form-control"
+                           value="{{ request.form.get('contact_email', '') }}"
+                           required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label for="contact_city" class="form-label">City</label>
+                    <input type="text" id="contact_city" name="contact_city" class="form-control"
+                           value="{{ request.form.get('contact_city', '') }}"
+                           required>
+                </div>
+
+                <div class="col-12">
+                    <label for="contact_address" class="form-label">Address</label>
+                    <input type="text" id="contact_address" name="contact_address" class="form-control"
+                           value="{{ request.form.get('contact_address', '') }}"
+                           required>
+                </div>
+            </div>
+            {% endif %}
+
+            <p class="form-hint mt-3 mb-0">
+                Your contact details are shared with an organization only after it accepts your request.
+            </p>
+        </div>
+
+        {% if not services %}<p class="note-box">No services are currently available. Please check again later.</p>{% endif %}
+        <button type="submit" class="btn-main" {% if not services %}disabled{% endif %}>Send Request</button>
+        <a href="{{ url_for('home') }}" class="btn-outline">Cancel</a>
+    </form>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/request-form.js') }}" defer></script>
+{% endblock %}

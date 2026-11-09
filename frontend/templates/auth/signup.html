@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+
+<div class="form-box-wide">
+
+    <h1 class="mb-4">Create an account</h1>
+
+    <div class="row g-3">
+
+        <!-- Choice 1: Individual -->
+        <div class="col-12 col-md-6">
+            <div class="box choice-box">
+                <h3>I need support</h3>
+                <a href="{{ url_for('register_individual') }}" class="btn-main">Sign up as Individual</a>
+            </div>
+        </div>
+
+        <!-- Choice 2: Organization -->
+        <div class="col-12 col-md-6">
+            <div class="box choice-box">
+                <h3>I represent an organization</h3>
+                <p class="text-muted-cc">Coordinator approval required.</p>
+                <a href="{{ url_for('register_organization') }}" class="btn-main">Sign up as Organization</a>
+            </div>
+        </div>
+
+    </div>
+
+    <p class="mt-4 mb-1">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+    <p>Or <a href="{{ url_for('request_form') }}">continue as Guest</a> without an account.</p>
+
+</div>
+
+{% endblock %}
