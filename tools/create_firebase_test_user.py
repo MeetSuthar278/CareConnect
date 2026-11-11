@@ -14,6 +14,7 @@ REST reference: https://firebase.google.com/docs/reference/rest/auth
 import argparse
 import getpass
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -22,7 +23,7 @@ from urllib.parse import urlencode
 
 # Public web configuration, matching the team's reviewed frontend. Not an Admin key.
 PROJECT_ID = "careconnect-7132c"
-WEB_API_KEY = "AIzaSyC7ZQpLZmwCIoBo7cCGQPDPjFytildgrZc"
+WEB_API_KEY = os.environ["FIREBASE_WEB_API_KEY"]
 BASE_URL = "https://identitytoolkit.googleapis.com/v1/accounts:"
 
 
