@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY requirements.txt requirements-hosting.txt ./
+RUN pip install --no-cache-dir -r requirements-hosting.txt \
+    && groupadd --gid 10001 careconnect \
+    && useradd --uid 10001 --gid 10001 --no-create-home careconnect
+COPY app/ ./app/
+COPY frontend/ ./frontend/
+COPY worker.py notification_worker.py sla_worker.py coordinator_worker.py feedback_worker.py outbox_dispatcher.py deadline_checker.py ./
+COPY deploy/check_schema.py ./deploy/check_schema.py
+USER 10001:10001
+EXPOSE 8000
+CMD ["gunicorn","--bind","0.0.0.0:8000","--workers","2","--threads","2","--timeout","60","--access-logfile","-","--error-logfile","-","app:create_app()"]

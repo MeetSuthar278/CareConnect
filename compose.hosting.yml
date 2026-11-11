@@ -1,0 +1,131 @@
+name: careconnect-hosted
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.hosting
+  image: careconnect-hosted:local
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  environment:
+    HOSTED_MODE: '1'
+    FLASK_DEBUG: '0'
+    SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY privately}
+    DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL privately}
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_PORT: '5672'
+    RABBITMQ_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+    RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD privately}
+    FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-careconnect-7132c}
+    GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_admin
+  secrets: [firebase_admin]
+  depends_on:
+    mysql:
+      condition: service_healthy
+    rabbitmq_setup:
+      condition: service_completed_successfully
+    schema_check:
+      condition: service_completed_successfully
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD privately}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-careconnect_db}
+      MYSQL_USER: ${MYSQL_USER:-careconnect}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD privately}
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: [CMD-SHELL, 'mysqladmin ping -h 127.0.0.1 --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD privately}
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+  rabbitmq_setup:
+    <<: *app
+    restart: 'no'
+    command: [python, -m, app.messaging.rabbitmq_config]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+  schema_check:
+    <<: *app
+    restart: 'no'
+    command: [python, deploy/check_schema.py]
+    depends_on:
+      mysql:
+        condition: service_healthy
+  web:
+    <<: *app
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  matching:
+    <<: *app
+    command: [python, worker.py]
+  notifications:
+    <<: *app
+    command: [python, notification_worker.py]
+  sla:
+    <<: *app
+    command: [python, sla_worker.py]
+  coordinator:
+    <<: *app
+    command: [python, coordinator_worker.py]
+  feedback:
+    <<: *app
+    command: [python, feedback_worker.py]
+  outbox:
+    <<: *app
+    command: [python, outbox_dispatcher.py]
+  acceptance_deadlines:
+    <<: *app
+    command: [python, deadline_checker.py, --kind, acceptance, --apply]
+  attendance_deadlines:
+    <<: *app
+    command: [python, deadline_checker.py, --kind, attendance, --apply]
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN to your DNS hostname}
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  rabbitmq_data:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  firebase_admin:
+    file: ${FIREBASE_ADMIN_JSON:?Set private Firebase JSON path}
