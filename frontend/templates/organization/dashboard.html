@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}Organization Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <div>
+        <h1>{{ org.org_name }}</h1>
+    </div>
+    <div>Account status: {{ status_label(org.status) }}</div>
+</div>
+
+{# Message shown until the coordinator approves the organization #}
+{% if org.status == 'Pending' %}
+    <div class="note-box mb-4">
+        <strong>Waiting for approval.</strong>
+        A coordinator is checking your organization. You will not get requests until you are approved.
+    </div>
+{% elif org.status == 'Suspended' %}
+    <div class="note-box mb-4">
+        <strong>Your account is suspended.</strong> You will not get new requests. Please contact a coordinator.
+    </div>
+{% endif %}
+
+<!-- Numbers -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ counts.incoming }}</p>
+            <p class="stat-label">Incoming referrals</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ counts.active }}</p>
+            <p class="stat-label">Accepted requests</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ counts.completed }}</p>
+            <p class="stat-label">Completed</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ counts.services }}</p>
+            <p class="stat-label">Services offered</p>
+        </div>
+    </div>
+</div>
+
+<!-- Newest requests -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="mb-0">Incoming referrals</h2>
+    <a href="{{ url_for('org_requests') }}">See all</a>
+</div>
+
+{% if requests %}
+    <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Reference</th>
+                    <th>Service</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                    <tr>
+                        <td>{{ r.reference }}</td>
+                        <td>{{ r.service_name }}</td>
+                        <td>{{ priority_deadline(r) }}</td>
+                        <td>{{ status_label(r.status) }}</td>
+                        <td><a href="{{ url_for('org_request_details', request_id=r.request_id) }}">View</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="note-box">No new requests right now.</div>
+{% endif %}
+
+{% endblock %}
