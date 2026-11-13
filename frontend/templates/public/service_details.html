@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ service.service_name }}{% endblock %}
+
+{% block content %}
+
+<p><a href="{{ url_for('browse_services') }}">&larr; Back to services</a></p>
+
+<div class="form-box-wide">
+
+    <div class="page-title-row">
+        <div>
+            <p class="eyebrow mb-1">{{ service.category }}</p>
+            <h1>{{ service.service_name }}</h1>
+        </div>
+        {% if session.get('role') in [none, 'individual'] %}<a href="{{ url_for('request_form', service_id=service.service_id) }}" class="btn-main">Request this service</a>{% endif %}
+    </div>
+
+    <div class="box">
+        <p>{{ service.description }}</p>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>Organization</dt>
+                <dd>{{ service.org_name }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Who can use it</dt>
+                <dd>{{ service.eligibility }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Area</dt>
+                <dd>{{ service.area }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Delivery method</dt>
+                <dd>{{ service.delivery_method }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Availability</dt>
+                <dd>{{ service.availability }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Response window</dt>
+                <dd>{{ service.response_hours }} hours after assignment, or sooner if the request priority requires it.</dd>
+            </div>
+        </dl>
+    </div>
+
+    <p class="box-small mt-3">
+        The organization's phone and email are shared with you only after they accept your request.
+    </p>
+</div>
+
+{% endblock %}
