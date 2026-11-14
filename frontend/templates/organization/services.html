@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, service_fields %}
+
+{% block title %}My Services{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <h1>My Services</h1>
+</div>
+
+<!-- Table of services this organization offers -->
+{% if services %}
+    <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive mb-4">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Category</th>
+                    <th>Delivery</th>
+                    <th>Area</th>
+                    <th>Status</th><th>Response window</th><th>Referral limit</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in services %}
+                    <tr class="{{ 'service-paused' if s.status == 'Paused' else '' }}">
+                        <td>{{ s.service_name }}</td>
+                        <td>{{ s.category }}</td>
+                        <td>{{ s.delivery_method }}</td>
+                        <td>{{ s.area }}</td>
+                        <td>{{ status_label(s.status) }}</td><td>{{ s.response_hours }} hours</td><td>{{ s.max_referrals }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('org_toggle_service', offering_id=s.organization_service_id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
+                                <input type="hidden" name="target_status" value="{{ 'paused' if s.raw_status == 'active' else 'active' }}">
+                                <input type="hidden" name="expected_status" value="{{ s.raw_status }}">
+                                <input type="hidden" name="availability_version" value="{{ s.availability_version }}">
+                                <button type="submit" class="btn-outline btn-small">
+                                    {% if s.status == 'Active' %}Pause{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr><td colspan="8">
+                        <details {% if request.method == 'POST' and request.form.get('organization_service_id') == s.organization_service_id|string %}open{% endif %}>
+                            <summary>Edit settings for {{ s.service_name }}</summary>
+                            <form method="post" action="{{ url_for('org_services') }}" class="py-3">
+                                <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
+                                <input type="hidden" name="organization_service_id" value="{{ s.organization_service_id }}">
+                                <input type="hidden" name="expected_status" value="{{ s.raw_status }}">
+                                <input type="hidden" name="expected_limit" value="{{ s.max_referrals }}">
+                                <input type="hidden" name="availability_version" value="{{ s.availability_version }}">
+                                {{ service_fields(s, categories, delivery_methods, request.form, limited=true) }}
+                                <button type="submit" class="btn-main mt-3">Save Settings</button>
+                            </form>
+                        </details>
+                    </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="note-box mb-4">You have not added any services yet.</div>
+{% endif %}
+
+<!-- Add a new service -->
+<div class="box form-box-wide" style="margin-left:0;">
+    <h3 class="mb-3">Add a service</h3>
+
+    <form id="add-service-form" method="post" action="{{ url_for('organization.add_service') }}">
+        <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
+        {% set add_values = request.form if request.endpoint == 'organization.add_service' else {} %}
+        {{ service_fields({}, categories, delivery_methods, add_values, limited=true, adding=true, catalog=catalog, areas=areas) }}
+
+        <button type="submit" class="btn-main mt-3" {% if not catalog or not areas %}disabled{% endif %}>Add Service</button>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/organization-services.js') }}" defer></script>
+{% endblock %}

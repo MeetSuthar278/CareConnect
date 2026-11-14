@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}Request {{ req.reference }}{% endblock %}
+
+{% block content %}
+
+<p><a href="{{ url_for('org_requests') }}">&larr; Back to Requests</a></p>
+
+<div class="page-title-row">
+    <div>
+        <h1>Request {{ req.reference }}</h1>
+        <p class="text-muted-cc mb-0">{{ req.service_name }}</p>
+    </div>
+    <div>{{ status_label(req.status) }}</div>
+</div>
+
+<div class="row g-3">
+
+    <div class="col-12 col-md-7">
+        <div class="box">
+            <h3>Request details</h3>
+            <dl class="detail-list">
+                {% if req.assigned_service_name and req.assigned_service_name != req.service_name %}
+                <div class="detail-row"><dt>Assigned service</dt><dd>{{ req.assigned_service_name }}</dd></div>
+                {% endif %}
+                <div class="detail-row">
+                    <dt>Priority</dt>
+                    <dd>{{ priority_deadline(req) }}</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Delivery</dt>
+                    <dd>{{ req.delivery_method }}</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Notes</dt>
+                    <dd>{{ req.details or '-' }}</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Sent on</dt>
+                    <dd>{{ req.created_at }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="box mt-3">
+            <h3>Contact details</h3>
+
+            {# Contact details are shown only after the organization accepts #}
+            {% if req.status in ['Accepted', 'Completed'] %}
+                <dl class="detail-list">
+                    <div class="detail-row"><dt>Name</dt><dd>{{ req.contact_name }}</dd></div>
+                    <div class="detail-row"><dt>Phone</dt><dd>{{ req.contact_phone }}</dd></div>
+                    <div class="detail-row"><dt>Email</dt><dd>{{ req.contact_email }}</dd></div>
+                    <div class="detail-row"><dt>Address</dt><dd>{{ req.contact_address }}</dd></div>
+                </dl>
+            {% else %}
+                <p class="text-muted-cc mb-0">Contact details are shown after you accept this request.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-12 col-md-5">
+        <div class="box mb-3">
+            <h3>Status history</h3>{{ status_history(req) }}
+        </div>
+        <div class="box">
+            <h3>Update status</h3>
+
+            {% if req.status == 'Assigned' and org_active and not req.is_overdue %}
+                <form method="post" action="{{ url_for('org_respond', request_id=req.request_id) }}" data-referral-action>
+                    <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
+                    <input type="hidden" name="referral_id" value="{{ req.referral_id }}">
+                    <button type="submit" name="action" value="accept" class="btn-main">Accept</button>
+                    <button type="submit" name="action" value="reject" class="btn-danger-outline"
+                            data-confirm="Reject this referral? A coordinator will review it for reassignment.">Reject</button>
+                </form>
+
+            {% elif req.raw_status == 'accepted' %}
+                <form method="post" action="{{ url_for('org_update_status', request_id=req.request_id) }}" data-referral-action>
+                    <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
+                    <input type="hidden" name="referral_id" value="{{ req.referral_id }}">
+                    <button type="submit" name="action" value="attend" class="btn-main">Record attendance</button>
+                </form>
+
+            {% elif req.raw_status == 'attended' %}
+                <form method="post" action="{{ url_for('org_update_status', request_id=req.request_id) }}" data-referral-action>
+                    <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
+                    <input type="hidden" name="referral_id" value="{{ req.referral_id }}">
+                    <p class="text-muted-cc">Click when the person has received the service.</p>
+                    <button type="submit" name="status" value="Completed" class="btn-main"
+                            data-confirm="Mark this request as completed?">Mark as Completed</button>
+                </form>
+
+            {% else %}
+                <p class="text-muted-cc mb-0">No action is available. Overdue referrals require coordinator review.</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/organization-actions.js') }}" defer></script>
+{% endblock %}
