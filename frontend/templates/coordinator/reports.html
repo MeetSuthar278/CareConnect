@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <h1>Reports</h1>
+</div>
+
+<!-- Main numbers -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ totals.requests }}</p>
+            <p class="stat-label">Total requests</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ totals.completed }}</p>
+            <p class="stat-label">Completed</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ totals.organizations }}</p>
+            <p class="stat-label">Active organizations</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{% if totals.helpful_percentage is not none %}{{ totals.helpful_percentage }}%{% else %}&mdash;{% endif %}</p>
+            <p class="stat-label">Helpful feedback &middot; {{ totals.feedback_count }} responses</p>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+
+    <!-- By status -->
+    <div class="col-12 col-lg-5">
+        <h2>Requests by status</h2>
+        <div class="table-box">
+            <table class="table">
+                <thead>
+                    <tr><th>Status</th><th>Number</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in by_status %}
+                        <tr><td>{{ row.name }}</td><td>{{ row.count }}</td></tr>
+                    {% else %}<tr><td colspan="2">No requests to report.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- By category -->
+    <div class="col-12 col-lg-7">
+        <h2>Requests by service category</h2>
+        <div class="table-box">
+            <table class="table">
+                <thead>
+                    <tr><th>Category</th><th>Requests</th><th>Completed</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in by_category %}
+                        <tr><td>{{ row.name }}</td><td>{{ row.count }}</td><td>{{ row.completed }}</td></tr>
+                    {% else %}<tr><td colspan="3">No requests to report.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

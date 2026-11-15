@@ -1,0 +1,16 @@
+{#
+    Shows messages from Flask.
+    In Flask use:  flash("Saved!", "success")   or   flash("Wrong password", "error")
+#}
+<div id="page-messages" aria-live="polite">
+{% if form_error %}<div class="alert alert-danger" role="alert">{{ form_error }}</div>{% endif %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert {% if category == 'error' %}alert-danger{% elif category == 'info' %}alert-info{% else %}alert-success{% endif %}" role="{{ 'alert' if category == 'error' else 'status' }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+</div>

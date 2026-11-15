@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}Organizations{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <h1>Organizations</h1>
+</div>
+
+<!-- Filter -->
+<form method="get" action="{{ url_for('coord_organizations') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
+    <div>
+        <label for="status" class="form-label">Status</label>
+        <select id="status" name="status" class="form-select">
+            <option value="">All</option>
+            {% for s in ['Active', 'Pending', 'Suspended', 'Rejected'] %}
+                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn-outline">Filter</button>
+</form>
+
+{% if orgs %}
+    <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Organization</th>
+                    <th>Service area</th>
+                    <th>Services</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orgs %}
+                    <tr>
+                        <td>{{ o.org_name }}<br><small class="text-muted-cc">{{ o.email }}</small>
+                            <details class="mt-2"><summary>Organization details</summary>
+                                <dl class="detail-list">
+                                    <div class="detail-row"><dt>Contact person</dt><dd>{{ o.contact_name }}</dd></div>
+                                    <div class="detail-row"><dt>Phone</dt><dd>{{ o.phone }}</dd></div>
+                                    <div class="detail-row"><dt>Location</dt><dd>{{ o.address }}, {{ o.city }}</dd></div>
+                                    <div class="detail-row"><dt>Applied on</dt><dd>{{ o.created_at }}</dd></div>
+                                </dl>
+                            </details>
+                        </td>
+                        <td>{{ o.service_area }}</td>
+                        <td>{{ o.service_count }}</td>
+                        <td>{{ status_label(o.status) }}</td>
+                        <td>
+                            {% if not organizations_read_only %}
+                            <form method="post" action="{{ url_for('coord_org_status', org_id=o.org_id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ coordinator_csrf }}">
+                            {% endif %}
+                                {% if o.status == 'Active' %}
+                                    <button type="{{ 'button' if organizations_read_only else 'submit' }}" name="action" value="suspend" class="btn-danger-outline btn-small" {% if organizations_read_only %}disabled{% endif %}
+                                            data-confirm="Suspend this organization?">Suspend</button>
+                                {% elif o.status == 'Suspended' %}
+                                    <button type="{{ 'button' if organizations_read_only else 'submit' }}" name="action" value="reactivate" class="btn-main btn-small" {% if organizations_read_only %}disabled{% endif %}>Reactivate</button>
+                                {% elif o.status == 'Pending' %}
+                                    {% if o.reviewable %}<a href="{{ url_for('coord_approvals') }}">Review</a>{% else %}-{% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            {% if not organizations_read_only %}</form>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="note-box">No organizations found.</div>
+{% endif %}
+
+{% endblock %}

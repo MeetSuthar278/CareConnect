@@ -1,0 +1,93 @@
+{#
+    Small reusable pieces.
+    Use in a page like this:
+        {% from 'components/macros.html' import status_label %}
+        {{ status_label(r.status) }}
+#}
+
+{# Colored label for a status like Pending, Accepted, Active... #}
+{% macro status_label(text) %}
+    <span class="status status-{{ text | lower | replace(' ', '-') }}">{{ text }}</span>
+{% endmacro %}
+
+{% macro priority_deadline(req) %}
+    {{ status_label(req.priority) }} <small>({{ req.priority_hours }} h)</small>
+    <span class="deadline">Response due: {{ req.response_deadline | display_time }}</span>
+{% endmacro %}
+
+{% macro status_history(req) %}
+    <p>Current status: {{ status_label(req.status) }}</p>
+    <ol class="timeline" aria-label="Request status history">
+        {% for step in req.history %}
+            <li {% if loop.last %}aria-current="step"{% endif %}>
+                {{ step.text }}<br><small>{{ step.time | display_time }}</small>
+            </li>
+        {% endfor %}
+    </ol>
+{% endmacro %}
+
+{% macro service_fields(s, categories, methods, form_values, limited=false, all_disabled=false, adding=false, catalog=(), areas=()) %}
+    {% set key = s.organization_service_id if s and limited else (s.service_id if s else 'new') %}
+    {% set values = form_values if form_values and form_values.get('organization_service_id' if limited else 'service_id', 'new') == key|string else s %}
+    {% set shared = s if limited else values %}
+    <div class="row g-3">
+        {% for field, label in [('service_name', 'Service name'), ('area', 'Service area'), ('eligibility', 'Who can use it'), ('availability', 'Availability')] %}
+            <div class="col-12 col-md-6">
+                <label class="form-label" for="{{ field }}_{{ key }}">{{ label }}</label>
+                {% if adding and field == 'service_name' %}
+                <select class="form-select" id="{{ field }}_{{ key }}" name="service_id" required>
+                    <option value="">Choose a service</option>
+                    {% for choice in catalog %}
+                    <option value="{{ choice.service_id }}" data-category="{{ choice.category }}"
+                            data-description="{{ choice.description or '' }}" data-delivery="{{ choice.delivery_mode }}"
+                            {% if form_values.get('service_id') == choice.service_id|string %}selected{% endif %}>{{ choice.name }}</option>
+                    {% endfor %}
+                </select>
+                {% elif adding and field == 'area' %}
+                <select class="form-select" id="{{ field }}_{{ key }}" name="service_area_id" required>
+                    <option value="">Choose a service area</option>
+                    {% for area in areas %}<option value="{{ area.area_id }}" {% if form_values.get('service_area_id') == area.area_id|string %}selected{% endif %}>{{ area.region_name }}, {{ area.city }}</option>{% endfor %}
+                </select>
+                {% else %}
+                <input class="form-control" id="{{ field }}_{{ key }}" name="{{ field }}" value="{{ shared.get(field, '') }}" {% if limited or all_disabled %}disabled{% endif %} required>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <div class="col-12 col-md-6">
+            <label class="form-label" for="category_{{ key }}">Category</label>
+            <select class="form-select" id="category_{{ key }}" name="category" {% if limited or all_disabled %}disabled{% endif %} required>
+                {% for category in categories %}<option {% if category == shared.get('category') %}selected{% endif %}>{{ category }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label" for="status_{{ key }}">Service status</label>
+            <select class="form-select" id="status_{{ key }}" name="status" {% if all_disabled %}disabled{% endif %} required>
+                {% for state in ['Active', 'Paused'] %}<option {% if state == values.get('status') %}selected{% endif %}>{{ state }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label" for="response_hours_{{ key }}">Response window</label>
+            <select class="form-select" id="response_hours_{{ key }}" name="response_hours" {% if limited or all_disabled %}disabled{% endif %} required>
+                {% for hours in ([2] if limited else [6, 12, 24]) %}<option value="{{ hours }}" {% if hours == shared.get('response_hours', 2 if limited else 12)|int %}selected{% endif %}>{{ hours }} hours</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label" for="max_referrals_{{ key }}">Maximum active referrals</label>
+            <input class="form-control" type="number" id="max_referrals_{{ key }}" name="max_referrals" min="{{ [1,s.get('current_active_referrals',0)]|max if limited else 1 }}" max="1000" value="{{ values.get('max_referrals', 10) }}" {% if all_disabled %}disabled{% endif %} required>
+        </div>
+        <fieldset class="col-12" data-delivery-group>
+            <legend class="form-label">Supported delivery methods (choose at least one)</legend>
+            {% set selected_methods = shared.getlist('delivery_methods') if shared.getlist is defined else shared.get('delivery_methods', ['In person']) %}
+            {% for method in methods %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="delivery_{{ key }}_{{ loop.index }}" name="delivery_methods" value="{{ method }}" {% if method in selected_methods %}checked{% endif %} {% if limited or all_disabled %}disabled{% endif %}>
+                    <label class="form-check-label" for="delivery_{{ key }}_{{ loop.index }}">{{ method }}</label>
+                </div>
+            {% endfor %}
+        </fieldset>
+        <div class="col-12">
+            <label class="form-label" for="description_{{ key }}">Short description</label>
+            <textarea class="form-control" id="description_{{ key }}" name="description" rows="2" {% if limited or all_disabled %}disabled{% endif %} required>{{ shared.get('description', '') or '' }}</textarea>
+        </div>
+    </div>
+{% endmacro %}
