@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}All Requests{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <h1>All Requests</h1>
+</div>
+
+<!-- Filter -->
+<form method="get" action="{{ url_for('coord_requests') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
+    <div>
+        <label for="status" class="form-label">Status</label>
+        <select id="status" name="status" class="form-select">
+            <option value="">All</option>
+            {% for s in request_statuses %}
+                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="priority_filter" class="form-label">Priority</label>
+        <select id="priority_filter" name="priority" class="form-select">
+            <option value="">All priorities</option>
+            {% for priority, hours in priority_hours.items() %}
+                <option value="{{ priority }}" {% if priority == selected_priority %}selected{% endif %}>{{ priority }} ({{ hours }} h)</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="org_filter" class="form-label">Organization</label>
+        <select id="org_filter" name="org_id" class="form-select">
+            <option value="">All organizations</option>
+            {% for org in orgs %}<option value="{{ org.org_id }}" {% if org.org_id|string == selected_org %}selected{% endif %}>{{ org.org_name }}</option>{% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="attention_filter" class="form-label">Needs attention</label>
+        <select id="attention_filter" name="attention" class="form-select">
+            <option value="">All requests</option>
+            {% for reason in ['Unmatched', 'Rejected referral', 'Expired referral', 'Overdue', 'Manual review'] %}
+                <option {% if reason == selected_attention %}selected{% endif %}>{{ reason }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn-outline">Filter</button>
+    <a href="{{ url_for('coord_requests') }}" class="btn-outline">Clear</a>
+</form>
+
+{% if requests %}
+    <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Reference</th>
+                    <th>Service</th>
+                    <th>Priority</th>
+                    <th>Requester</th>
+                    <th>Organization</th>
+                    <th>Status</th>
+                    <th>Reassign</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                    <tr id="request-{{ r.request_id }}">
+                        <td>{{ r.reference }}<br><small class="text-muted-cc">{{ r.created_at }}</small></td>
+                        <td>{{ r.service_name }}</td>
+                        <td>{{ priority_deadline(r) }}</td>
+                        <td>{{ r.contact_name }}{% if r.is_guest %} <small class="text-muted-cc">(guest)</small>{% endif %}</td>
+                        <td>{{ r.org_name or '-' }}</td>
+                        <td>
+                            {{ status_label(r.status) }}
+                            {% for reason in r.attention_reasons if reason != r.status %}<span class="attention-label">{{ status_label(reason) }}</span>{% endfor %}
+                        </td>
+                        <td>
+                            {# Reassign only for requests that are not finished #}
+                            {% if coordinator_read_only %}
+                                -
+                            {% elif r.status == 'Unmatched' %}
+                                {% set choices = r.eligible_orgs %}
+                                {% if choices %}
+                                <form method="post" action="{{ url_for('coord_reassign', request_id=r.request_id) }}" class="assignment-form" data-confirm-assignment="{{ r.reference }}" data-current-org="{{ r.org_name or 'Unassigned' }}">
+                                    <input type="hidden" name="csrf_token" value="{{ coordinator_csrf }}">
+                                    <input type="hidden" name="expected_referral_id" value="{{ r.expected_referral_id }}">
+                                    <label for="assign_{{ r.request_id }}" class="form-label">Eligible organization</label>
+                                    <select id="assign_{{ r.request_id }}" name="org_id" class="form-select form-select-sm" required>
+                                        <option value="">Choose organization</option>
+                                        {% for o in choices %}
+                                            <option value="{{ o.org_id }}">{{ o.org_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn-outline btn-small mt-2">{% if r.org_id %}Reassign{% else %}Assign{% endif %}</button>
+                                </form>
+                                {% else %}<p class="box-small">No eligible organization. Review service coverage, status and capacity.</p>{% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><td colspan="7">
+                        <details id="details-{{ r.request_id }}">
+                            <summary>Request details &middot; {{ r.reference }}</summary>
+                            <div class="row g-3 py-3">
+                                <div class="col-12 col-lg-7">
+                                    <dl class="detail-list">
+                                        <div class="detail-row"><dt>Description</dt><dd>{{ r.details or 'No description provided' }}</dd></div>
+                                        <div class="detail-row"><dt>Service / category</dt><dd>{{ r.service_name }} / {{ r.category }}</dd></div>
+                                        {% if r.assigned_service_name and r.assigned_service_name != r.service_name %}<div class="detail-row"><dt>Assigned service</dt><dd>{{ r.assigned_service_name }}</dd></div>{% endif %}
+                                        <div class="detail-row"><dt>Delivery</dt><dd>{{ r.delivery_method }}</dd></div>
+                                        <div class="detail-row"><dt>Location</dt><dd>{{ r.contact_address }}, {{ r.contact_city }}</dd></div>
+                                        <div class="detail-row"><dt>Contact</dt><dd>{{ r.contact_email }}<br>{{ r.contact_phone }}</dd></div>
+                                        <div class="detail-row"><dt>Organization</dt><dd>{{ r.org_name or 'Unassigned' }}</dd></div>
+                                        <div class="detail-row"><dt>Priority / deadline</dt><dd>{{ priority_deadline(r) }}</dd></div>
+                                    </dl>
+                                </div>
+                                <div class="col-12 col-lg-5"><h2>Status history</h2>{{ status_history(r) }}</div>
+                            </div>
+                        </details>
+                    </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="note-box">No requests found.</div>
+{% endif %}
+
+{% endblock %}

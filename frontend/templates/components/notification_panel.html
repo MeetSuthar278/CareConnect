@@ -1,0 +1,32 @@
+{#
+    Bell with a small list of notifications (in-app only).
+    The backend should send a list called "notifications" to the template.
+    Each item looks like: {'message': '...', 'time': '...'}
+    If the list is not sent, the panel just says there is nothing new.
+#}
+{% set note_list = notifications | default([]) %}
+
+<div class="dropdown">
+    <button class="bell-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+        </svg>
+        {% if note_list|length > 0 %}
+            <span class="bell-count">{{ note_list|length }}</span>
+        {% endif %}
+    </button>
+
+    <div class="dropdown-menu dropdown-menu-end notification-menu">
+        {% if note_list|length > 0 %}
+            {% for n in note_list %}
+                <div class="notification-item">
+                    {{ n.message }}<br>
+                    <small>{{ n.time }}</small>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="notification-item">No new notifications.</div>
+        {% endif %}
+    </div>
+</div>

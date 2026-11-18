@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/requests.js') }}" defer></script>{% endblock %}
+{% block content %}
+<section class="intro container app-container">
+  <div><p class="hero-label">COMMUNITY SUPPORT, CONNECTED</p>
+    <h1>A little support.<br><span>A stronger community.</span></h1>
+    <p class="intro-copy">Tell us what you need. We?ll help connect your request with an eligible community organization in your area.</p>
+  </div>
+  <aside class="intro-note"><span class="note-mark" aria-hidden="true">&#8599;</span>
+    <strong>Better together</strong><p>Local organizations. Shared resources.<br>One place to ask for support.</p>
+    <span class="partnership-label">SDG 17 ? Partnerships for the Goals</span>
+  </aside>
+</section>
+<div class="container app-container pb-5">
+  <div class="demo-notice"><strong>{% if demo_mode %}Demo Mode{% else %}Preview only{% endif %}</strong>
+    {% if demo_mode %}You?re using a synthetic demo member. Please enter demo information only.{% else %}Request submission requires the local demo server. Authentication is not implemented.{% endif %}
+  </div>
+  <div class="workspace">
+    <section class="card request-card" aria-labelledby="form-heading">
+      <div class="card-body">
+        <p class="section-eyebrow">01 / REQUEST SUPPORT</p><h2 id="form-heading">What can we help with?</h2>
+        <p class="muted">Choose a service and tell us a little about your request.</p>
+        <div id="form-message" class="alert alert-danger" role="alert" hidden></div>
+        <div id="catalog-loading" role="status">Loading available services?</div>
+        <button id="catalog-retry" type="button" class="btn btn-outline-custom mb-3" hidden>Retry loading services</button>
+        <form id="request-form" data-demo-enabled="{{ 'true' if demo_mode else 'false' }}">
+          <fieldset id="request-fields" disabled>
+            <div class="row g-3">
+              <div class="col-md-6"><label for="service" class="form-label">Service</label><select id="service" name="service_id" class="form-select" required><option value="">Select a service</option></select></div>
+              <div class="col-md-6"><label for="area" class="form-label">Service area</label><select id="area" name="service_area_id" class="form-select" required><option value="">Select an area</option></select></div>
+              <div class="col-12"><label for="priority" class="form-label">Priority</label><select id="priority" name="priority_id" class="form-select" required aria-describedby="priority-help"><option value="">Select a priority</option></select>
+                <p id="priority-help" class="form-text">The attendance deadline is when an organization should start helping, not complete the service.</p></div>
+              <div class="col-12"><label for="title" class="form-label">Request title</label><input id="title" name="title" class="form-control" maxlength="150" required placeholder="A short summary of your request" autocomplete="off"></div>
+              <div class="col-12"><label for="description" class="form-label">Description</label><textarea id="description" name="description" class="form-control" rows="4" maxlength="8000" required placeholder="Describe the non-medical support you?re looking for."></textarea><p class="form-text">Use synthetic details. Do not enter private contact or medical information.</p></div>
+            </div>
+            <button id="submit-request" type="submit" class="btn btn-primary-custom w-100 mt-3">Submit Request <span aria-hidden="true">&#8594;</span></button>
+          </fieldset>
+        </form>
+        <p class="scope-notice">CareConnect is for non-medical community services. It does not provide emergency assistance.</p>
+        <button id="new-request" type="button" class="btn btn-outline-custom mt-2" hidden>Start another request</button>
+      </div>
+    </section>
+    <aside class="status-column">
+      <section class="card status-card" aria-labelledby="status-heading">
+        <div class="card-body"><div class="d-flex justify-content-between align-items-center"><p class="section-eyebrow mb-0">02 / YOUR REQUEST</p><span class="live-label">LIVE STATUS</span></div>
+          <h2 id="status-heading" class="mt-3">Stay in the loop</h2>
+          <div id="status-empty"><div class="empty-symbol" aria-hidden="true">&#8596;</div><p>Your next step starts here.</p><p class="muted">After you submit, your request ID and latest status will appear here.</p></div>
+          <div id="status-content" hidden>
+            <p id="submission-receipt" class="muted small"></p>
+            <p><span id="status-badge" class="status-badge">?</span></p>
+            <dl class="request-details"><div><dt>Request ID</dt><dd id="detail-id">?</dd></div><div><dt>Service</dt><dd id="detail-service">?</dd></div><div><dt>Area</dt><dd id="detail-area">?</dd></div><div><dt>Priority</dt><dd id="detail-priority">?</dd></div><div><dt>Attendance deadline</dt><dd id="detail-deadline">?</dd></div></dl>
+            <p id="status-explanation" class="status-explanation" role="status" aria-live="polite"></p>
+            <p id="poll-message" class="muted small" role="status" aria-live="polite"></p>
+            <button id="refresh-status" type="button" class="btn btn-outline-custom w-100">Refresh status</button>
+          </div>
+        </div>
+      </section>
+      <div class="support-note"><strong>A thoughtful match</strong><p>Requests are matched using service availability, location, priority support and partner capacity.</p></div>
+    </aside>
+  </div>
+</div>
+<section id="how-it-works" class="how-it-works">
+  <div class="container app-container"><p class="section-eyebrow">CONNECTED BEHIND THE SCENES</p><h2 class="section-title">How CareConnect Works</h2><p class="section-description">An explanation of the event-driven workflow. These steps are not a live processing monitor.</p>
+    <ol class="architecture-flow"><li><strong>Member</strong><span>Submits a request</span></li><li><strong>Flask API</strong><span>Saves request + outbox event</span></li><li><strong>RabbitMQ</strong><code>ServiceRequestCreated</code></li><li><strong>Matching worker</strong><span>Selects an eligible partner</span></li><li><strong>RabbitMQ</strong><code>ReferralCreated</code></li><li><strong>Notification worker</strong><span>Stores the organization alert</span></li></ol>
+    <p class="small muted mt-3 mb-0">The status panel reports request state only. A matched request does not confirm notification delivery or service attendance.</p>
+  </div>
+</section>
+{% endblock %}

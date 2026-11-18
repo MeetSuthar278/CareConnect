@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+
+{% block title %}Coordinator Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <div>
+        <h1>Coordinator Dashboard</h1>
+    </div>
+</div>
+
+<!-- Numbers -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('coord_approvals') }}" class="box box-link">
+            <p class="stat-number">{{ counts.pending_orgs }}</p>
+            <p class="stat-label">Organizations to approve</p>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('coord_requests', attention='Unmatched') }}" class="box box-link">
+            <p class="stat-number">{{ counts.unmatched }}</p>
+            <p class="stat-label">Unmatched requests</p>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('coord_requests', attention='Overdue') }}" class="box box-link">
+            <p class="stat-number">{{ counts.overdue }}</p>
+            <p class="stat-label">Overdue requests</p>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="box">
+            <p class="stat-number">{{ counts.total }}</p>
+            <p class="stat-label">All requests</p>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+
+    <!-- Organizations waiting -->
+    <div class="col-12 col-lg-6">
+        <h2>Waiting for approval</h2>
+        {% if pending_orgs %}
+            <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr><th>Organization</th><th>Area</th><th><span class="visually-hidden">Actions</span></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for o in pending_orgs %}
+                            <tr>
+                                <td>{{ o.org_name }}</td>
+                                <td>{{ o.service_area }}</td>
+                                <td><a href="{{ url_for('coord_approvals') }}">Review</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="note-box">No organizations are waiting.</div>
+        {% endif %}
+    </div>
+
+    <!-- Requests that need attention -->
+    <div class="col-12 col-lg-6">
+        <h2>Needs attention</h2>
+        {% if attention_requests %}
+            <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr><th>Reference</th><th>Service / deadline</th><th>Needs attention</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in attention_requests %}
+                            <tr>
+                                <td><a href="{{ url_for('coord_requests', _anchor='request-' ~ r.request_id) }}">{{ r.reference }}</a></td>
+                                <td>{{ r.service_name }}<br>{{ priority_deadline(r) }}</td>
+                                <td>{% for reason in r.attention_reasons %}<span class="attention-label">{{ status_label(reason) }}</span>{% endfor %}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="note-box">Nothing needs attention.</div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% endblock %}

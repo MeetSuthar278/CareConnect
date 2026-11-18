@@ -1,0 +1,11 @@
+<nav class="navbar bg-white border-bottom" aria-label="Main navigation">
+  <div class="container app-container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('home') }}">
+      <span class="brand-icon" aria-hidden="true">&#9829;</span><span class="brand-name">CareConnect</span>
+    </a>
+    <div class="nav-actions"><a href="#request-form" class="nav-link">Request support</a>
+      <a href="#how-it-works" class="nav-link">How it works</a>
+      <span class="demo-pill">{% if demo_mode %}Demo Mode{% else %}Demo preview{% endif %}</span>
+    </div>
+  </div>
+</nav>
