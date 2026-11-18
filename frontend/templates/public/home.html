@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+
+{# Service options appear after a visitor chooses Continue as Guest. #}
+{% set show_options = session.get('role') or request.args.get('guest') == '1' %}
+
+<!-- Top part of the home page -->
+<section class="hero">
+    <p class="eyebrow">Community support made simple</p>
+    <h1>Connecting people with the support they need.</h1>
+    <p class="lead-text">
+        Find trusted community organizations offering food assistance, peer support,
+        seniors' activities and more.
+    </p>
+
+    {% if show_options %}
+        <div class="hero-buttons">
+            {% if session.get('role') in ['organization', 'coordinator'] %}
+            <a href="{{ url_for('org_dashboard' if session.get('role') == 'organization' else 'coord_dashboard') }}" class="btn-main">Go to Dashboard</a>
+            {% else %}
+            <a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>
+            {% endif %}
+            <a href="{{ url_for('browse_services') }}" class="btn-outline">Browse Services</a>
+        </div>
+    {% else %}
+        <div class="hero-buttons">
+            <a href="{{ url_for('signup') }}" class="btn-main">Sign Up</a>
+            <a href="{{ url_for('login') }}" class="btn-outline">Log In</a>
+        </div>
+        <p class="guest-line">
+            <a href="{{ url_for('home', guest='1') }}">Continue as Guest</a>
+        </p>
+    {% endif %}
+</section>
+
+{% if show_options and session.get('role') in [none, 'individual'] %}
+<!-- Service options for guests and signed-in users -->
+<section class="row g-3">
+
+    <div class="col-12 col-md-4">
+        <a href="{{ url_for('browse_services') }}" class="box box-link">
+            <div class="box-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </div>
+            <p class="box-title">Find support</p>
+            <p class="box-small">Browse services</p>
+        </a>
+    </div>
+
+    <div class="col-12 col-md-4">
+        <a href="{{ url_for('request_form') }}" class="box box-link">
+            <div class="box-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h6"/></svg>
+            </div>
+            <p class="box-title">Send a request</p>
+            <p class="box-small">Tell us what you need</p>
+        </a>
+    </div>
+
+    <div class="col-12 col-md-4">
+        <a href="{{ url_for('signup') }}" class="box box-link">
+            <div class="box-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/></svg>
+            </div>
+            <p class="box-title">Get connected</p>
+            <p class="box-small">Find an organization</p>
+        </a>
+    </div>
+
+</section>
+
+{% endif %}
+
+{% endblock %}

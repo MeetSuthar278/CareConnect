@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Browse Services{% endblock %}
+
+{% block content %}
+
+<div class="page-title-row">
+    <h1>Services</h1>
+    {% if session.get('role') in [none, 'individual'] %}<a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>{% endif %}
+</div>
+
+<!-- Search and filter (sends the values to Flask using GET) -->
+<form method="get" action="{{ url_for('browse_services') }}" class="box mb-4">
+    <div class="row g-3 align-items-end">
+
+        <div class="col-12 col-md-5">
+            <label for="search" class="form-label">Search</label>
+            <input type="text" id="search" name="search" class="form-control"
+                   placeholder="Example: food, seniors"
+                   value="{{ search | default('') }}">
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="category" class="form-label">Category</label>
+            <select id="category" name="category" class="form-select">
+                <option value="">All categories</option>
+                {% for c in categories %}
+                    <option value="{{ c }}" {% if c == selected_category %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-2">
+            <label for="delivery" class="form-label">Delivery</label>
+            <select id="delivery" name="delivery" class="form-select">
+                <option value="">Any</option>
+                {% for d in delivery_methods %}
+                    <option value="{{ d }}" {% if d == selected_delivery %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-2">
+            <button type="submit" class="btn-main w-100">Search</button>
+        </div>
+    </div>
+</form>
+{% if search or selected_category or selected_delivery %}<p><a href="{{ url_for('browse_services') }}">Clear filters</a></p>{% endif %}
+
+<!-- List of services -->
+{% if services %}
+    <div class="row g-3">
+        {% for s in services %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="box h-100 d-flex flex-column">
+                    <p class="eyebrow mb-1">{{ s.category }}</p>
+                    <h3>{{ s.service_name }}</h3>
+                    <p class="box-small mb-1">{{ s.org_name }}</p>
+                    <p class="box-small mb-3">{{ s.delivery_method }} &middot; {{ s.area }}</p>
+                    <a href="{{ url_for('service_details', service_id=s.service_id) }}"
+                       class="btn-outline btn-small mt-auto align-self-start">View details</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="note-box">No services found. Try a different search.</div>
+{% endif %}
+
+{% endblock %}
