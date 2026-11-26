@@ -1,6 +1,7 @@
 
 from app import db
 from sqlalchemy.dialects.mysql import DATETIME, TINYINT, VARCHAR
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
 class Role(db.Model):
@@ -20,7 +21,8 @@ class User(db.Model):
         nullable=False
     )
     email = db.Column(db.String(120), nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+    firebase_uid = db.Column(VARCHAR(128, charset='ascii', collation='ascii_bin'), nullable=True, unique=True)
+    password_hash = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
 
 
@@ -105,7 +107,6 @@ class Referral(db.Model):
     )
     organization_id = db.Column(db.Integer, nullable=False)
     attempt_number = db.Column(db.Integer, nullable=False)
-    is_backup = db.Column(db.Boolean, default=False)
     status = db.Column(db.String(30), default="sent")
     response_deadline = db.Column(db.DateTime, nullable=False)
     responded_at = db.Column(db.DateTime)
@@ -114,6 +115,11 @@ class Referral(db.Model):
         "CASE WHEN status IN ('sent', 'accepted', 'attended') THEN 1 ELSE NULL END",
         persisted=False,
     ))
+
+    @hybrid_property
+    def is_backup(self):
+        """Expose backup status to Python and SQLAlchemy without storing it."""
+        return self.attempt_number > 1
 
 
 class ReferralStatusHistory(db.Model):

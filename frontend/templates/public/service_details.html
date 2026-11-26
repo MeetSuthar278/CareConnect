@@ -4,7 +4,7 @@
 
 {% block content %}
 
-<p><a href="{{ url_for('browse_services') }}">&larr; Back to services</a></p>
+<p><a href="{{ back_url }}">&larr; Back to services</a></p>
 
 <div class="form-box-wide">
 
@@ -42,7 +42,7 @@
             </div>
             <div class="detail-row">
                 <dt>Response window</dt>
-                <dd>{{ service.response_hours }} hours after assignment, or sooner if the request priority requires it.</dd>
+                <dd>{{ service.response_hours }} hours after assignment, or sooner if the service attendance target requires it.</dd>
             </div>
         </dl>
     </div>

@@ -12,7 +12,6 @@
     <a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>
 </div>
 
-<!-- Numbers -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-4">
         <div class="box">
@@ -28,7 +27,6 @@
     </div>
 </div>
 
-<!-- Latest requests -->
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h2 class="mb-0">Latest requests</h2>
     <a href="{{ url_for('my_requests') }}">See all</a>
@@ -41,7 +39,7 @@
                 <tr>
                     <th>Reference</th>
                     <th>Service</th>
-                    <th>Priority / deadline</th><th>Status</th>
+                    <th>Time frame / target</th><th>Status</th>
                     <th>Date</th>
                     <th><span class="visually-hidden">Actions</span></th>
                 </tr>
@@ -52,7 +50,7 @@
                         <td>{{ r.reference }}</td>
                         <td>{{ r.service_name }}</td>
                         <td>{{ priority_deadline(r) }}</td><td>{{ status_label(r.status) }}</td>
-                        <td>{{ r.created_at }}</td>
+                        <td>{{ r.created_at | display_time }}</td>
                         <td><a href="{{ url_for('request_details', request_id=r.request_id) }}">View</a></td>
                     </tr>
                 {% endfor %}

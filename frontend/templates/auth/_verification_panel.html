@@ -1,0 +1,39 @@
+<section id="verification-screen" class="form-box" aria-labelledby="verification-heading" hidden>
+    <h1 id="verification-heading" tabindex="-1">Verify your email</h1>
+    <div id="verification-messages" aria-live="polite"></div>
+    <div class="box">
+        <p>Open the verification link sent to <strong id="verification-email"></strong>.</p>
+        <p>Check your inbox and spam folder. After opening the link, return here and choose “I've verified my email”. You can also verify on another device.</p>
+        <p class="form-hint">If a link expires, request a new email below. If you close this page, return to <a href="{{ url_for('verify_email') }}">finish registration</a> and sign in again.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <button id="check-verification" type="button" class="btn-main">I've verified my email</button>
+            <button id="resend-verification" type="button" class="btn-outline">Resend verification email</button>
+        </div>
+        <p id="resend-cooldown" class="form-hint" role="timer" aria-live="off"></p>
+    </div>
+    <form id="registration-completion-form" class="box mt-3" hidden>
+        <h2>Complete your registration</h2>
+        <p>Your email is verified. Re-enter your details to finish registration. All fields are required.</p>
+        <div class="mb-3">
+            <label class="form-label" for="completion-kind">Account type</label>
+            <select id="completion-kind" class="form-select" required>
+                <option value="individual">Individual</option>
+                <option value="organization">Organization representative</option>
+            </select>
+        </div>
+        {% for kind, fields in [('individual', [('full_name', 'Full name', 101), ('phone', 'Phone number', 25), ('address', 'Address', 255), ('city', 'City', 100)]), ('organization', [('org_name', 'Organization name', 150), ('address', 'Address', 255), ('service_area', 'Service area', 255), ('city', 'City', 100), ('contact_name', 'Contact person name', 100), ('phone', 'Phone number', 25)])] %}
+        <fieldset data-completion-kind="{{ kind }}" {% if kind == 'organization' %}hidden disabled{% endif %}>
+            <legend class="visually-hidden">{{ kind | title }} details</legend>
+            {% for name, label, limit in fields %}
+            <div class="mb-3">
+                <label class="form-label" for="completion-{{ kind }}-{{ name }}">{{ label }}</label>
+                <input id="completion-{{ kind }}-{{ name }}" name="{{ name }}" type="{{ 'tel' if name == 'phone' else 'text' }}" class="form-control" maxlength="{{ limit }}" {% if name == 'phone' %}pattern="[+0-9\(\) .\-]{7,25}" title="Enter a phone number with 7 to 15 digits." autocomplete="tel"{% endif %} required>
+            </div>
+            {% endfor %}
+        </fieldset>
+        {% endfor %}
+        <p id="completion-approval-note" class="form-hint" hidden>After registration, a coordinator must approve your organization before it can receive referrals.</p>
+        <button type="submit" class="btn-main">Complete registration</button>
+    </form>
+    <p class="mt-3"><a id="verification-back" href="{{ url_for('login') }}">Back to login</a></p>
+</section>

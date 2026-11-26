@@ -36,6 +36,10 @@ def accept_referral(session, referral_id, user_id):
         """), {"user": user_id}).scalar_one_or_none()
         if representative != referral.organization_id:
             raise AcceptanceError("Referral not found", 404)
+        approved = session.execute(text("SELECT status FROM organizations WHERE organization_id=:org FOR UPDATE"),
+                                   {'org': representative}).scalar_one_or_none()
+        if approved != 'approved':
+            raise AcceptanceError('Organization approval is required to accept referrals', 403)
         # A retry after a committed acceptance does not change the response timestamp.
         if referral.status == "accepted":
             return {"referral_id": referral_id, "request_id": request_id,
@@ -97,6 +101,10 @@ def reject_referral(session, referral_id, user_id, reason):
         if representative != referral.organization_id:
             # Do not reveal another organization's referral existence or details.
             raise RejectionError("Referral not found", 404)
+        org_status = session.execute(text('SELECT status FROM organizations WHERE organization_id=:org FOR UPDATE'),
+                                     {'org': representative}).scalar_one_or_none()
+        if org_status == 'pending':
+            raise RejectionError('Organization approval is required to respond to referrals', 403)
         if referral.status == "rejected":
             return {"referral_id": referral_id, "request_id": request_id,
                     "status": "rejected", "already_processed": True}

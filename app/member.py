@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import db
+from app.pagination import Pagination, page_rows
 from app.auth import roles_required
 from app.services.guest_requests import DISPLAY_STATUS, GuestRequestError, create_guest_request, owned_request
 from app.services.feedback import FeedbackError, submit_feedback
@@ -21,6 +22,12 @@ from app.services.password_sessions import password_identity
 member_bp = Blueprint('member', __name__)
 COOKIE = 'careconnect_member'
 SESSION_SECONDS = 3600
+REQUEST_SORTS = {
+    'newest': ('Newest first', 'sr.created_at DESC,sr.request_id DESC'),
+    'oldest': ('Oldest first', 'sr.created_at ASC,sr.request_id ASC'),
+    'service': ('Service: A to Z', 's.name ASC,sr.request_id DESC'),
+    'service_desc': ('Service: Z to A', 's.name DESC,sr.request_id DESC'),
+}
 
 
 def firebase_app():
@@ -85,7 +92,7 @@ def establish_session():
     session['member_csrf'] = secrets.token_urlsafe(32)
     response = jsonify(redirect_url='/member')
     response.set_cookie(COOKIE, cookie, max_age=SESSION_SECONDS, httponly=True,
-                        secure=request.is_secure, samesite='Lax', path='/')
+                        secure=current_app.config['HOSTED_MODE'] or request.is_secure, samesite='Lax', path='/')
     response.delete_cookie('careconnect_organization', path='/')
     response.delete_cookie('careconnect_coordinator', path='/')
     response.headers['Cache-Control'] = 'no-store'
@@ -106,7 +113,7 @@ def load_member():
     if cookie:
         try:
             claims = cookie_claims(cookie)
-            if not isinstance(claims.get('uid'), str):
+            if claims.get('email_verified') is not True or not isinstance(claims.get('uid'), str):
                 raise ValueError('Invalid member claims')
             with Session(db.engine) as database:
                 member_id = database.execute(text('''
@@ -141,14 +148,17 @@ def private_response(response):
 @member_bp.get('/member')
 def dashboard():
     from app.frontend import render_team
-    rows = member_requests()
     with Session(db.engine) as database:
+        rows = member_requests(database, limit=5)
+        counts = database.execute(text('''SELECT
+            COALESCE(SUM(CASE WHEN status NOT IN ('completed','cancelled','unmatched') THEN 1 ELSE 0 END),0) AS active,
+            COALESCE(SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END),0) AS completed
+            FROM service_requests WHERE member_id=:owner'''), {'owner': g.member['user_id']}).mappings().one()
         notes=database.execute(text('''SELECT message,created_at AS time FROM notifications
             WHERE user_id=:id AND is_read=FALSE ORDER BY notification_id DESC LIMIT 10'''),
             {'id':g.member['user_id']}).mappings().all()
-    return render_team('individual/dashboard.html', requests=rows[:5],
-                       active_count=sum(r['raw_status'] not in {'completed', 'cancelled', 'unmatched'} for r in rows),
-                       completed_count=sum(r['raw_status']=='completed' for r in rows),notifications=notes)
+    return render_team('individual/dashboard.html', requests=rows,
+                       active_count=counts['active'], completed_count=counts['completed'],notifications=notes)
 
 
 def render_profile(error=None,status=200):
@@ -208,9 +218,8 @@ def profile_page():
     return redirect(url_for('member.profile_page'),code=303)
 
 
-def member_requests():
-    with Session(db.engine) as database:
-        rows = database.execute(text('''
+def member_requests(database, *, pagination=None, status='', limit=5):
+    sql = '''
             SELECT sr.request_id,sr.status,sr.created_at,s.name AS service_name,
                    p.level_name AS priority,p.deadline_hours AS priority_hours,
                    (SELECT r.response_deadline FROM referrals r WHERE r.request_id=sr.request_id
@@ -219,8 +228,17 @@ def member_requests():
                     WHERE r.request_id=sr.request_id ORDER BY r.attempt_number DESC LIMIT 1) AS org_name
             FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
             JOIN priority_levels p ON p.priority_id=sr.priority_id
-            WHERE sr.member_id=:owner ORDER BY sr.created_at DESC,sr.request_id DESC
-        '''), {'owner': g.member['user_id']}).mappings().all()
+            WHERE sr.member_id=:owner
+        '''
+    params = {'owner': g.member['user_id']}
+    if status:
+        sql += ' AND sr.status=:status'
+        params['status'] = next((key for key, value in DISPLAY_STATUS.items() if value == status), '')
+    if pagination:
+        rows = page_rows(database, sql, params, pagination)
+    else:
+        rows = database.execute(text(sql + ' ORDER BY sr.created_at DESC,sr.request_id DESC LIMIT :limit'),
+                                dict(params, limit=limit)).mappings().all()
     return [dict(row, reference=f"CC-{row['request_id']}", raw_status=row['status'],
                  status=DISPLAY_STATUS.get(row['status'], row['status'])) for row in rows]
 
@@ -229,14 +247,17 @@ def member_requests():
 def my_requests():
     from app.frontend import render_team
     selected = request.args.get('status', '')
-    rows = member_requests()
-    return render_team('individual/my_requests.html', requests=[r for r in rows if not selected or r['status']==selected],
+    pagination = Pagination.from_request(REQUEST_SORTS)
+    with Session(db.engine) as database:
+        rows = member_requests(database, pagination=pagination, status=selected)
+    return render_team('individual/my_requests.html', requests=rows, pagination=pagination,
                        selected_status=selected, request_statuses=list(DISPLAY_STATUS.values()))
 
 
 @member_bp.get('/member/requests/<int:request_id>')
 def details(request_id):
     from app.frontend import render_team
+    listing=Pagination.from_request(REQUEST_SORTS,endpoint='member.my_requests')
     with Session(db.engine) as database:
         record = owned_request(database, request_id, g.member['user_id'])
         if record is None:
@@ -263,6 +284,7 @@ def details(request_id):
                   org_name=organization['name'] if organization else None,history=history,
                   assigned_service_name=record['service_name'],feedback=feedback)
     return render_team('individual/request_details.html',req=record,
+                       back_url=listing.url(listing.page),list_query=listing.current_query,
                        member_csrf=session['member_csrf'],can_cancel=can_cancel,
                        assigned_org=organization if organization and organization['status'] in {'accepted','attended','completed'} else None)
 
@@ -271,6 +293,7 @@ def details(request_id):
 def cancel(request_id):
     if not csrf_valid('member_csrf',request.form.get('csrf_token')):
         abort(403)
+    listing=Pagination.from_request(REQUEST_SORTS,endpoint='member.my_requests')
     if set(request.form)!={'csrf_token'} or len(request.form.getlist('csrf_token'))!=1:
         abort(400)
     try:
@@ -284,7 +307,7 @@ def cancel(request_id):
     except SQLAlchemyError:
         current_app.logger.error('Request cancellation transaction failed')
         flash('Could not cancel the request. Please retry.','error')
-    return redirect(url_for('member.details',request_id=request_id),code=303)
+    return redirect(url_for('member.details',request_id=request_id,**listing.current_query),code=303)
 
 
 def saved_feedback(database,request_id):

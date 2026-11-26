@@ -1,15 +1,9 @@
 USE careconnect_db;
 --
 -- Disable foreign key checks during schema creation
--- ----------------------------------------------------------------------------
 SET FOREIGN_KEY_CHECKS = 0;
 
-
--- ============================================================================
--- SECTION 1: PEOPLE AND ACCESS
--- ============================================================================
-
--- 1. ROLES TABLE
+-- People and access
 -- Role definitions: member, representative, coordinator
 CREATE TABLE roles (
     role_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -18,13 +12,14 @@ CREATE TABLE roles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. USERS TABLE
 -- Login accounts for all system participants; identifies actor for every action
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     role_id INT NOT NULL,
     email VARCHAR(120) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
+    firebase_uid VARCHAR(128)
+    CHARACTER SET ascii COLLATE ascii_bin NULL,
+    password_hash VARCHAR(255) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -32,10 +27,10 @@ CREATE TABLE users (
         FOREIGN KEY (role_id) REFERENCES roles (role_id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     INDEX idx_users_role (role_id),
-    INDEX idx_users_email (email)
+    INDEX idx_users_email (email),
+    CONSTRAINT uq_users_firebase_uid UNIQUE (firebase_uid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. MEMBER_PROFILES TABLE
 -- Member contact details and location (1:0..1 relationship with users)
 CREATE TABLE member_profiles (
     profile_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -54,11 +49,7 @@ CREATE TABLE member_profiles (
     INDEX idx_member_city (city)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================================================================
--- SECTION 2: THE PARTNER NETWORK & CATALOG
--- ============================================================================
-
--- 4. ORGANIZATIONS TABLE
+-- The partner network & catalog
 -- Approved, pending, or suspended partner service providers
 CREATE TABLE organizations (
     organization_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -73,7 +64,6 @@ CREATE TABLE organizations (
     INDEX idx_organizations_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. ORGANIZATION_REPRESENTATIVES TABLE
 -- Links a user account to the partner organization they act for
 CREATE TABLE organization_representatives (
     representative_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,7 +83,6 @@ CREATE TABLE organization_representatives (
     INDEX idx_org_reps_org (organization_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. ORGANIZATION_APPLICATIONS TABLE
 -- Registration requests and coordinator approvals/rejections
 CREATE TABLE organization_applications (
     application_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -117,7 +106,6 @@ CREATE TABLE organization_applications (
     INDEX idx_org_apps_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. SERVICE_CATEGORIES TABLE
 -- High-level grouping of support services (e.g., Food Assistance, Peer Support)
 CREATE TABLE service_categories (
     category_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -127,7 +115,6 @@ CREATE TABLE service_categories (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 8. SERVICES TABLE
 -- Concrete support services with delivery modes
 CREATE TABLE services (
     service_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -144,7 +131,6 @@ CREATE TABLE services (
     INDEX idx_services_delivery_mode (delivery_mode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. SERVICE_AREAS TABLE
 -- Predefined list of geographic zones/quadrants for localized matching
 CREATE TABLE service_areas (
     area_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -155,7 +141,6 @@ CREATE TABLE service_areas (
     UNIQUE KEY uq_area_city_region (city, region_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 10. ORGANIZATION_SERVICES TABLE
 -- Services an organization offers, with active/paused status and active referral limits
 CREATE TABLE organization_services (
     organization_service_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -181,7 +166,6 @@ CREATE TABLE organization_services (
     INDEX idx_org_svc_counts (current_active_referrals, active_referral_limit)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 11. PRIORITY_LEVELS TABLE
 -- High (6h), Medium (12h), or Low (24h) attendance deadline definitions
 CREATE TABLE priority_levels (
     priority_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -191,7 +175,6 @@ CREATE TABLE priority_levels (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 12. SERVICE_PRIORITY_SUPPORT TABLE
 -- Priorities supported by an organization for each offered service
 CREATE TABLE service_priority_support (
     support_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -207,7 +190,6 @@ CREATE TABLE service_priority_support (
         ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 13. ORGANIZATION_AVAILABILITY TABLE
 -- Historical log of service pause and resume actions for partner availability reports
 CREATE TABLE organization_availability (
     availability_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -225,11 +207,7 @@ CREATE TABLE organization_availability (
     INDEX idx_org_avail_action (action, recorded_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================================================================
--- SECTION 3: REQUESTS, REFERRALS & WORKFLOW
--- ============================================================================
-
--- 14. SERVICE_REQUESTS TABLE
+-- Requests, referrals & workflow
 -- The central record: member requests with service, area, priority, and attendance deadline
 CREATE TABLE service_requests (
     request_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -259,14 +237,12 @@ CREATE TABLE service_requests (
     INDEX idx_req_deadline (attendance_deadline)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. REFERRALS TABLE
 -- Attempt to send request to partner (attempt 1 = primary, attempt 2+ = backup partner)
 CREATE TABLE referrals (
     referral_id INT AUTO_INCREMENT PRIMARY KEY,
     request_id INT NOT NULL,
     organization_id INT NOT NULL,
     attempt_number INT NOT NULL DEFAULT 1,
-    is_backup BOOLEAN NOT NULL DEFAULT FALSE,
     status ENUM('sent', 'accepted', 'rejected', 'timed_out', 'attended', 'completed') NOT NULL DEFAULT 'sent',
     response_deadline DATETIME NOT NULL,
     responded_at DATETIME NULL,
@@ -281,11 +257,9 @@ CREATE TABLE referrals (
         FOREIGN KEY (organization_id) REFERENCES organizations (organization_id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     INDEX idx_ref_status (status),
-    INDEX idx_ref_is_backup (is_backup),
     INDEX idx_ref_response_deadline (response_deadline)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 16. REFERRAL_STATUS_HISTORY TABLE
 -- Audit log of each status transition with timestamps and responsible actors
 CREATE TABLE referral_status_history (
     history_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -305,11 +279,7 @@ CREATE TABLE referral_status_history (
     INDEX idx_rsh_new_status (new_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================================================================
--- SECTION 4: OUTCOMES, FEEDBACK & NOTIFICATIONS
--- ============================================================================
-
--- 17. ATTENDANCE_RECORDS TABLE
+-- Outcomes, feedback & notifications
 -- Captures when partner first begins helping; proves if the deadline was met (1:0..1)
 CREATE TABLE attendance_records (
     attendance_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -333,7 +303,6 @@ CREATE TABLE attendance_records (
     INDEX idx_att_first_attended (first_attended_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 18. SERVICE_COMPLETIONS TABLE
 -- Closes the request, records resolution outcome and unlocks feedback (1:0..1)
 CREATE TABLE service_completions (
     completion_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -352,7 +321,6 @@ CREATE TABLE service_completions (
     INDEX idx_comp_outcome (outcome)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 19. FEEDBACK TABLE
 -- Member's 'helpful' yes/no rating and optional comment (1:0..1 per completed request)
 CREATE TABLE feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -375,7 +343,6 @@ CREATE TABLE feedback (
     INDEX idx_fb_org_helpful (organization_id, is_helpful)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 20. NOTIFICATIONS TABLE
 -- In-app alerts to users regarding referrals, deadlines, and feedback invitations
 CREATE TABLE notifications (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -395,8 +362,5 @@ CREATE TABLE notifications (
     INDEX idx_notif_user_read (user_id, is_read)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ----------------------------------------------------------------------------
 -- Re-enable foreign key checks
--- ----------------------------------------------------------------------------
 SET FOREIGN_KEY_CHECKS = 1;
-

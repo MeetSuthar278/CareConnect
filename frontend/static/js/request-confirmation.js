@@ -26,11 +26,12 @@
           typeof data.status !== 'string') throw new Error('Unexpected status response');
       document.getElementById('status-update-message')?.remove();
       const badge = document.querySelector('#request-status .status');
-      badge.textContent = data.display_status;
+      const labels = {Unmatched: 'Referred to coordinator', Escalated: 'Referred to coordinator'};
+      badge.textContent = labels[data.display_status] || data.display_status;
       badge.className = 'status status-' + data.display_status.toLowerCase().replaceAll(' ', '-');
       const due = document.querySelector('.deadline');
       if (data.response_deadline) {
-        due.textContent = 'Response due: ' + new Intl.DateTimeFormat('en-GB', {
+        due.textContent = 'Organization response due: ' + new Intl.DateTimeFormat('en-GB', {
           dateStyle:'medium', timeStyle:'short', timeZone:'UTC'
         }).format(new Date(data.response_deadline)) + ' UTC';
       }

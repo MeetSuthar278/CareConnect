@@ -1,9 +1,4 @@
-{#
-    Bell with a small list of notifications (in-app only).
-    The backend should send a list called "notifications" to the template.
-    Each item looks like: {'message': '...', 'time': '...'}
-    If the list is not sent, the panel just says there is nothing new.
-#}
+{# notifications contains message/time mappings; missing lists render empty. #}
 {% set note_list = notifications | default([]) %}
 
 <div class="dropdown">
@@ -18,11 +13,12 @@
     </button>
 
     <div class="dropdown-menu dropdown-menu-end notification-menu">
+        <div class="notification-item"><strong>Recent unread notifications</strong></div>
         {% if note_list|length > 0 %}
             {% for n in note_list %}
                 <div class="notification-item">
                     {{ n.message }}<br>
-                    <small>{{ n.time }}</small>
+                    <small>{{ n.time | display_time }}</small>
                 </div>
             {% endfor %}
         {% else %}

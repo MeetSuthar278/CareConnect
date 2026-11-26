@@ -1,11 +1,13 @@
-// Bind the team's existing form. No new fields, labels or layout are introduced.
+import {firebase} from './firebase-client.js';
+import {beginVerification} from './registration-verification.js';
+
 const form = document.getElementById('login-form');
 const email = document.getElementById('email');
 const password = document.getElementById('password');
 const button = form.querySelector('button[type="submit"]');
 const messages = document.getElementById('page-messages');
 let submitting = false;
-let firebasePromise;
+
 
 function showMessage(text, success = false) {
   const alert = document.createElement('div');
@@ -15,20 +17,6 @@ function showMessage(text, success = false) {
   messages.replaceChildren(alert);
 }
 
-async function firebase() {
-  if (!firebasePromise) {
-    firebasePromise = Promise.all([
-      import('https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js'),
-      import('https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js'),
-    ]).then(([appSDK, authSDK]) => {
-      const config = JSON.parse(document.getElementById('firebase-web-config').textContent);
-      const app = appSDK.initializeApp(config);
-      return {auth: authSDK.getAuth(app), sdk: authSDK};
-    }).catch(error => { firebasePromise = null; throw error; });
-  }
-  return firebasePromise;
-}
-
 form.addEventListener('submit', async event => {
   event.preventDefault();
   if (submitting || !form.reportValidity()) return;
@@ -36,8 +24,10 @@ form.addEventListener('submit', async event => {
   button.disabled = true;
   form.setAttribute('aria-busy', 'true');
   messages.replaceChildren();
+  button.textContent = 'Signing in...';
   let provider;
   let backendVerified = false;
+  let verificationStarted = false;
   try {
     provider = await firebase();
     // Browser SDK credentials stay in memory; supported roles get an HttpOnly server cookie.
@@ -45,7 +35,12 @@ form.addEventListener('submit', async event => {
     const credential = await provider.sdk.signInWithEmailAndPassword(
       provider.auth, email.value.trim(), password.value);
     password.value = '';
-    // The backend applies email verification using the account's SQL-owned role.
+    if (!credential.user.emailVerified) {
+      verificationStarted = true;
+      await beginVerification(provider, credential.user);
+      return;
+    }
+    // Flask independently enforces verified token claims for every role.
     const token = await credential.user.getIdToken(true);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
@@ -59,6 +54,11 @@ form.addEventListener('submit', async event => {
     let account;
     try { account = await response.json(); }
     catch (_) { throw new Error('Unable to verify your account. Please try again.'); }
+    if (account.code === 'registration-required') {
+      verificationStarted = true;
+      await beginVerification(provider, credential.user);
+      return;
+    }
     if (!response.ok) throw new Error(account.error || 'Unable to verify your account.');
     if (!Number.isInteger(account.user_id) ||
         !['member', 'representative', 'coordinator'].includes(account.role)) {
@@ -105,11 +105,12 @@ form.addEventListener('submit', async event => {
         : error.code ? 'Sign-in failed. Please try again.' : error.message));
   } finally {
     password.value = '';
-    if (provider && !backendVerified) {
+    if (provider && !backendVerified && !verificationStarted) {
       try { await provider.sdk.signOut(provider.auth); } catch (_) { /* no session authorized */ }
     }
     submitting = false;
     button.disabled = false;
+    button.textContent = 'Log In';
     form.removeAttribute('aria-busy');
   }
 });

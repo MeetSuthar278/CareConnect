@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% from 'components/macros.html' import status_label, priority_deadline, status_history %}
+{% block title %}Review {{ req.reference }}{% endblock %}
+{% block content %}
+<p><a href="{{ back_url }}">&larr; All requests</a></p>
+<h1>Review request {{ req.reference }}</h1>
+<div class="row g-3">
+    <div class="col-12 col-lg-7">
+        <div class="box">
+            <dl class="detail-list">
+                <div class="detail-row"><dt>Service / category</dt><dd>{{ req.service_name }} / {{ req.category }}</dd></div>
+                <div class="detail-row"><dt>Description</dt><dd>{{ req.details or 'No description provided' }}</dd></div>
+                <div class="detail-row"><dt>Delivery</dt><dd>{{ req.delivery_method }}</dd></div>
+                <div class="detail-row"><dt>Requester</dt><dd>{{ req.contact_name }}{% if req.is_guest %} (guest){% endif %}</dd></div>
+                <div class="detail-row"><dt>Location</dt><dd>{{ req.contact_address }}, {{ req.contact_city }}</dd></div>
+                <div class="detail-row"><dt>Contact</dt><dd>{{ req.contact_email }}<br>{{ req.contact_phone }}</dd></div>
+                <div class="detail-row"><dt>Organization</dt><dd>{{ req.org_name or 'Unassigned' }}</dd></div>
+                <div class="detail-row"><dt>Preferred time frame</dt><dd>{{ priority_deadline(req) }}</dd></div>
+                <div class="detail-row"><dt>Service attendance target</dt><dd>{{ req.attendance_deadline | display_time }}</dd></div>
+            </dl>
+            {% for reason in req.attention_reasons %}{{ status_label(reason) }} {% endfor %}
+        </div>
+        {% if req.raw_status == 'unmatched' %}
+        <div class="box mt-3">
+            <h2>Assign a referral</h2>
+            {% if req.eligible_orgs %}
+            <form method="post" action="{{ url_for('coord_reassign', request_id=req.request_id, **list_query) }}" data-confirm-assignment="{{ req.reference }}" data-current-org="{{ req.org_name or 'Unassigned' }}">
+                <input type="hidden" name="csrf_token" value="{{ coordinator_csrf }}">
+                <input type="hidden" name="expected_referral_id" value="{{ req.expected_referral_id }}">
+                <label for="assign-org" class="form-label">Eligible organization</label>
+                <select id="assign-org" name="org_id" class="form-select" required>
+                    <option value="">Choose organization</option>
+                    {% for organization in req.eligible_orgs %}<option value="{{ organization.org_id }}">{{ organization.org_name }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn-main mt-3">Assign referral</button>
+            </form>
+            {% else %}<p>No eligible organization is available. Review service coverage, approval status, capacity and the service target.</p>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="col-12 col-lg-5"><div class="box"><h2>Status history</h2>{{ status_history(req) }}</div></div>
+</div>
+{% endblock %}

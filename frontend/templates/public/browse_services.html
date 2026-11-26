@@ -9,7 +9,6 @@
     {% if session.get('role') in [none, 'individual'] %}<a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>{% endif %}
 </div>
 
-<!-- Search and filter (sends the values to Flask using GET) -->
 <form method="get" action="{{ url_for('browse_services') }}" class="box mb-4">
     <div class="row g-3 align-items-end">
 
@@ -40,14 +39,14 @@
             </select>
         </div>
 
-        <div class="col-12 col-md-2">
-            <button type="submit" class="btn-main w-100">Search</button>
+        <div class="col-12 d-flex gap-2 flex-wrap align-items-end">
+            {% include 'components/list_controls.html' %}
+            <button type="submit" class="btn-main">Search services</button>
         </div>
     </div>
 </form>
 {% if search or selected_category or selected_delivery %}<p><a href="{{ url_for('browse_services') }}">Clear filters</a></p>{% endif %}
 
-<!-- List of services -->
 {% if services %}
     <div class="row g-3">
         {% for s in services %}
@@ -57,7 +56,7 @@
                     <h3>{{ s.service_name }}</h3>
                     <p class="box-small mb-1">{{ s.org_name }}</p>
                     <p class="box-small mb-3">{{ s.delivery_method }} &middot; {{ s.area }}</p>
-                    <a href="{{ url_for('service_details', service_id=s.service_id) }}"
+                    <a href="{{ url_for('service_details', service_id=s.service_id, **pagination.current_query) }}"
                        class="btn-outline btn-small mt-auto align-self-start">View details</a>
                 </div>
             </div>
@@ -67,4 +66,5 @@
     <div class="note-box">No services found. Try a different search.</div>
 {% endif %}
 
+{% include 'components/pagination.html' %}
 {% endblock %}

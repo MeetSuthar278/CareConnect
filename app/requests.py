@@ -89,8 +89,7 @@ def request_status():
 def get_demo_member_id():
     if current_app.config.get('HOSTED_MODE'):
         return None
-    # Temporary local demo only.
-    # Replace with authenticated user ID before production.
+    # Shared identity is restricted to local debug/testing mode.
     if not current_app.debug and not current_app.testing:
         return None
 
@@ -151,7 +150,6 @@ def create_request():
     if priority is None:
         return jsonify({"error": "Invalid priority"}), 400
 
-    # Calculate attendance deadline in UTC.
     now = datetime.now(timezone.utc)
     deadline = now + timedelta(hours=priority.deadline_hours)
 
@@ -195,7 +193,6 @@ def create_request():
     }), 201
 
 
-# Get all service requests belonging to the current member.
 @requests_bp.get("/api/requests")
 def get_requests():
     member_id = get_demo_member_id()
@@ -225,7 +222,6 @@ def get_requests():
     ]), 200
 
 
-# Get a particular service request.
 @requests_bp.get("/api/requests/<int:request_id>")
 def get_request(request_id):
     member_id = get_demo_member_id()

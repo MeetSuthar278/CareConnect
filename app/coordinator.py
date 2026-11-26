@@ -3,22 +3,43 @@ import secrets
 import time
 
 from flask import Blueprint, abort, current_app, flash, g, jsonify, redirect, request, session, url_for
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import db
+from app.pagination import Pagination, page_rows, search_term, like_pattern
 from app.auth import roles_required
 from app.member import cookie_claims, csrf_valid, mint_cookie, SESSION_SECONDS
 from app.services.guest_requests import DISPLAY_STATUS, DELIVERY
 from app.services.outbox import utcnow
-from app.services.organization_approvals import ApprovalError, decide_application, pending_applications
+from app.services.organization_approvals import ApprovalError, decide_application, pending_applications, APPLICATION_SORTS
 from app.services.organization_status import change_organization_status
 from app.services.manual_assignment import AssignmentError,assignment_choices,assign_request
 from app.services.reports import report_data
 
 coordinator_bp = Blueprint('coordinator', __name__)
 COOKIE = 'careconnect_coordinator'
+REQUEST_SORTS = {
+    'newest': ('Newest first', 'created_at DESC,request_id DESC'),
+    'oldest': ('Oldest first', 'created_at ASC,request_id ASC'),
+    'deadline': ('Service target: earliest first', 'attendance_deadline ASC,request_id ASC'),
+    'service': ('Service: A to Z', 'service_name ASC,request_id DESC'),
+    'service_desc': ('Service: Z to A', 'service_name DESC,request_id DESC'),
+}
+ORGANIZATION_SORTS = {
+    'name': ('Organization: A to Z', 'org_name ASC,org_id ASC'),
+    'name_desc': ('Organization: Z to A', 'org_name DESC,org_id DESC'),
+    'newest': ('Newest first', 'created_at DESC,org_id DESC'),
+    'oldest': ('Oldest first', 'created_at ASC,org_id ASC'),
+}
+ATTENTION_FILTERS = {
+    'Unmatched': "raw_status='unmatched'",
+    'Rejected referral': "referral_status='rejected' AND raw_status NOT IN ('completed','cancelled')",
+    'Expired referral': "referral_status='timed_out' AND raw_status NOT IN ('completed','cancelled')",
+    'Overdue': 'overdue=TRUE',
+    'Manual review': 'negative_feedback=TRUE',
+}
 
 
 def coordinator_identity(database, *, uid=None, user_id=None):
@@ -51,7 +72,7 @@ def establish_session():
     session['coordinator_csrf']=secrets.token_urlsafe(32)
     response=jsonify(redirect_url='/coordinator')
     response.set_cookie(COOKIE,cookie,max_age=SESSION_SECONDS,httponly=True,
-                        secure=request.is_secure,samesite='Lax',path='/')
+                        secure=current_app.config['HOSTED_MODE'] or request.is_secure,samesite='Lax',path='/')
     response.delete_cookie('careconnect_member',path='/')
     response.delete_cookie('careconnect_organization',path='/')
     return response
@@ -92,8 +113,8 @@ def private_response(response):
     return response
 
 
-def request_rows(database):
-    records=database.execute(text('''
+def request_rows(database, *, pagination=None, filters=None, request_id=None, attention=False, limit=5):
+    sql='''
         SELECT sr.request_id,sr.status AS raw_status,sr.created_at,sr.description AS details,
                sr.attendance_deadline,s.name AS service_name,s.delivery_mode,c.name AS category,
                p.level_name AS priority,p.deadline_hours AS priority_hours,
@@ -111,13 +132,48 @@ def request_rows(database):
             WHERE latest.request_id=sr.request_id ORDER BY latest.attempt_number DESC LIMIT 1)
         LEFT JOIN organizations o ON o.organization_id=r.organization_id
         LEFT JOIN attendance_records a ON a.request_id=sr.request_id
-        ORDER BY sr.request_id DESC
-    '''),{'now':utcnow()}).mappings().all()
-    history=database.execute(text('''
-        SELECT r.request_id,h.new_status AS text,h.changed_at AS time
-        FROM referral_status_history h JOIN referrals r ON r.referral_id=h.referral_id
-        ORDER BY h.changed_at,h.history_id
-    ''')).mappings().all()
+    '''
+    sql = 'SELECT * FROM (' + sql + ') request_list WHERE 1=1'
+    params = {'now': utcnow()}
+    filters = filters or {}
+    if request_id is not None:
+        sql += ' AND request_id=:request_id'
+        params['request_id'] = request_id
+    if filters.get('status'):
+        sql += ' AND raw_status=:status'
+        params['status'] = next((key for key,value in DISPLAY_STATUS.items() if value == filters['status']), '')
+    if filters.get('priority'):
+        sql += ' AND priority=:priority'
+        params['priority'] = filters['priority']
+    if filters.get('org_id'):
+        sql += ' AND org_id=:org'
+        params['org'] = filters['org_id']
+    if filters.get('search'):
+        sql += ''' AND (
+            LOWER(CONCAT('CC-',CAST(request_id AS CHAR))) LIKE :search ESCAPE '!'
+            OR LOWER(COALESCE(service_name,'')) LIKE :search ESCAPE '!'
+            OR LOWER(COALESCE(details,'')) LIKE :search ESCAPE '!'
+            OR LOWER(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))) LIKE :search ESCAPE '!'
+            OR LOWER(COALESCE(contact_email,'')) LIKE :search ESCAPE '!'
+            OR LOWER(COALESCE(org_name,'')) LIKE :search ESCAPE '!'
+            OR LOWER(COALESCE(category,'')) LIKE :search ESCAPE '!')'''
+        params['search'] = like_pattern(filters['search'])
+    if filters.get('attention'):
+        sql += ' AND (' + ATTENTION_FILTERS.get(filters['attention'], '1=0') + ')'
+    if attention:
+        sql += ' AND (' + ' OR '.join('('+condition+')' for condition in ATTENTION_FILTERS.values()) + ')'
+    if pagination:
+        records = page_rows(database, sql, params, pagination)
+    else:
+        records = database.execute(text(sql + ' ORDER BY created_at DESC,request_id DESC LIMIT :limit'),
+                                   dict(params, limit=1 if request_id is not None else limit)).mappings().all()
+    history = []
+    if request_id is not None and records:
+        history=database.execute(text('''
+            SELECT r.request_id,h.new_status AS text,h.changed_at AS time
+            FROM referral_status_history h JOIN referrals r ON r.referral_id=h.referral_id
+            WHERE r.request_id=:request ORDER BY h.changed_at,h.history_id
+        '''), {'request': request_id}).mappings().all()
     grouped={}
     for step in history:
         grouped.setdefault(step['request_id'],[]).append(dict(step))
@@ -149,12 +205,20 @@ def notifications(database):
 def dashboard():
     from app.frontend import render_team
     with Session(db.engine) as database:
-        requests=request_rows(database)
+        requests=request_rows(database,attention=True)
         pending=pending_applications(database)
+        counts=dict(database.execute(text('''SELECT COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN sr.status='unmatched' THEN 1 ELSE 0 END),0) AS unmatched,
+            COALESCE(SUM(CASE WHEN sr.attendance_deadline < :now AND a.attendance_id IS NULL
+                AND sr.status NOT IN ('completed','cancelled') THEN 1 ELSE 0 END),0) AS overdue
+            FROM service_requests sr LEFT JOIN attendance_records a ON a.request_id=sr.request_id'''),
+            {'now':utcnow()}).mappings().one())
+        counts['pending_orgs']=database.execute(text('''SELECT COUNT(*)
+            FROM organization_applications a JOIN organizations o ON o.organization_id=a.organization_id
+            WHERE o.status='pending' AND a.status IN ('submitted','under_review')
+              AND a.application_id=(SELECT MAX(latest.application_id) FROM organization_applications latest
+                  WHERE latest.organization_id=o.organization_id)''')).scalar_one()
         notes=notifications(database)
-    counts=dict(pending_orgs=len(pending),total=len(requests),
-                unmatched=sum(row['raw_status']=='unmatched' for row in requests),
-                overdue=sum(bool(row['overdue']) for row in requests))
     return render_team('coordinator/dashboard.html',counts=counts,pending_orgs=pending,
                        attention_requests=[row for row in requests if row['attention_reasons']],notifications=notes)
 
@@ -162,10 +226,11 @@ def dashboard():
 @coordinator_bp.get('/coordinator/approvals')
 def approvals():
     from app.frontend import render_team
+    pagination=Pagination.from_request(APPLICATION_SORTS,'oldest')
     with Session(db.engine) as database:
-        applications=pending_applications(database)
+        applications=pending_applications(database,pagination=pagination)
         notes=notifications(database)
-    return render_team('coordinator/approvals.html',orgs=applications,notifications=notes,
+    return render_team('coordinator/approvals.html',orgs=applications,notifications=notes,pagination=pagination,
                        coordinator_csrf=session['coordinator_csrf'])
 
 
@@ -173,29 +238,38 @@ def approvals():
 def organizations_page():
     from app.frontend import render_team
     selected=request.args.get('status','')
+    pagination=Pagination.from_request(ORGANIZATION_SORTS,'name')
     with Session(db.engine) as database:
-        organizations=database.execute(text('''
+        sql='''SELECT * FROM (
             SELECT o.organization_id AS org_id,o.name AS org_name,o.status AS raw_status,
                    o.contact_email AS email,o.contact_phone AS phone,o.address,o.city,
                    COALESCE(a.created_at,o.created_at) AS created_at,a.status AS application_status,
-                   mp.first_name,mp.last_name
+                   mp.first_name,mp.last_name,
+                   CASE WHEN o.status='approved' THEN 'Active' WHEN o.status='suspended' THEN 'Suspended'
+                        WHEN a.status='rejected' THEN 'Rejected' ELSE 'Pending' END AS display_status
             FROM organizations o LEFT JOIN organization_applications a ON a.application_id=(
                 SELECT latest.application_id FROM organization_applications latest
                 WHERE latest.organization_id=o.organization_id ORDER BY latest.application_id DESC LIMIT 1)
             LEFT JOIN member_profiles mp ON mp.user_id=a.submitted_by_user_id
-            ORDER BY o.name,o.organization_id
-        ''')).mappings().all()
+        ) org_list WHERE 1=1'''
+        params={}
+        if selected:
+            sql+=' AND display_status=:status'
+            params['status']=selected
+        organizations=page_rows(database,sql,params,pagination)
+        ids=[row['org_id'] for row in organizations]
         offerings=database.execute(text('''
             SELECT os.organization_id,os.service_id,sa.region_name,sa.city
             FROM organization_services os JOIN service_areas sa ON sa.area_id=os.service_area_id
+            WHERE os.organization_id IN :ids
             ORDER BY os.organization_id,sa.region_name,sa.city
-        ''')).mappings().all()
+        ''').bindparams(bindparam('ids',expanding=True)),{'ids':ids}).mappings().all() if ids else []
         representatives=database.execute(text('''
             SELECT rep.organization_id,rep.full_name FROM organization_representatives rep
             JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
-            WHERE u.is_active=TRUE AND r.role_name='representative'
+            WHERE u.is_active=TRUE AND r.role_name='representative' AND rep.organization_id IN :ids
             ORDER BY rep.organization_id,rep.is_primary_contact DESC,rep.user_id
-        ''')).mappings().all()
+        ''').bindparams(bindparam('ids',expanding=True)),{'ids':ids}).mappings().all() if ids else []
         notes=notifications(database)
     contacts={}
     for rep in representatives:
@@ -215,7 +289,7 @@ def organizations_page():
                            service_count=len(services.get(row['org_id'],set())),
                            service_area='; '.join(sorted(areas.get(row['org_id'],set()))) or '-',
                            reviewable=row['raw_status']=='pending' and row['application_status'] in {'submitted','under_review'}))
-    return render_team('coordinator/organizations.html',orgs=[row for row in result if not selected or row['status']==selected],
+    return render_team('coordinator/organizations.html',orgs=result,pagination=pagination,
                        selected_status=selected,organizations_read_only=False,notifications=notes,
                        coordinator_csrf=session['coordinator_csrf'])
 
@@ -268,22 +342,35 @@ def organization_decision(org_id):
 def requests_page():
     from app.frontend import render_team
     selected={key:request.args.get(key,'') for key in ('status','priority','org_id','attention')}
+    selected['search']=search_term()
+    pagination=Pagination.from_request(REQUEST_SORTS)
     with Session(db.engine) as database:
-        requests=request_rows(database)
-        orgs=database.execute(text('SELECT organization_id AS org_id,name AS org_name FROM organizations ORDER BY name')).mappings().all()
+        requests=request_rows(database,pagination=pagination,filters=selected)
+        orgs=database.execute(text('SELECT organization_id AS org_id,name AS org_name FROM organizations ORDER BY name,organization_id')).mappings().all()
         priorities=database.execute(text('SELECT level_name,deadline_hours FROM priority_levels ORDER BY priority_id')).all()
         notes=notifications(database)
-        for row in requests:
-            row['eligible_orgs'],row['expected_referral_id']=assignment_choices(database,row['request_id'])
-    filtered=[row for row in requests if
-              (not selected['status'] or row['status']==selected['status']) and
-              (not selected['priority'] or row['priority']==selected['priority']) and
-              (not selected['org_id'] or str(row['org_id'])==selected['org_id']) and
-              (not selected['attention'] or selected['attention'] in row['attention_reasons'])]
-    return render_team('coordinator/requests.html',requests=filtered,orgs=orgs,priority_hours=dict(priorities),
+    return render_team('coordinator/requests.html',requests=requests,orgs=orgs,priority_hours=dict(priorities),pagination=pagination,
                        request_statuses=list(DISPLAY_STATUS.values()),selected_status=selected['status'],
                        selected_priority=selected['priority'],selected_org=selected['org_id'],
+                       search=selected['search'],
                        selected_attention=selected['attention'],coordinator_read_only=False,notifications=notes,
+                       coordinator_csrf=session['coordinator_csrf'])
+
+
+@coordinator_bp.get('/coordinator/requests/<int:request_id>')
+def request_details(request_id):
+    from app.frontend import render_team
+    listing=Pagination.from_request(REQUEST_SORTS,endpoint='coordinator.requests_page')
+    with Session(db.engine) as database:
+        records=request_rows(database,request_id=request_id)
+        if not records:
+            abort(404)
+        record=records[0]
+        if record['raw_status']=='unmatched':
+            record['eligible_orgs'],record['expected_referral_id']=assignment_choices(database,request_id)
+        notes=notifications(database)
+    return render_team('coordinator/request_details.html',req=record,notifications=notes,
+                       back_url=listing.url(listing.page),list_query=listing.current_query,
                        coordinator_csrf=session['coordinator_csrf'])
 
 
@@ -291,6 +378,7 @@ def requests_page():
 def manual_assign(request_id):
     if not csrf_valid('coordinator_csrf',request.form.get('csrf_token')):
         abort(403)
+    listing=Pagination.from_request(REQUEST_SORTS,endpoint='coordinator.requests_page')
     if set(request.form)-{'csrf_token','org_id','expected_referral_id'} or any(len(request.form.getlist(key))!=1 for key in request.form):
         abort(400)
     try:
@@ -309,12 +397,11 @@ def manual_assign(request_id):
     except SQLAlchemyError:
         current_app.logger.error('Manual assignment transaction failed')
         flash('Could not assign the referral. Please reload and retry.','error')
-    return redirect(url_for('coordinator.requests_page')+f'#request-{request_id}',code=303)
+    return redirect(url_for('coordinator.request_details',request_id=request_id,**listing.current_query),code=303)
 
 
 @coordinator_bp.get('/coordinator/logout')
 def logout():
-    from flask import abort
     if not csrf_valid('coordinator_csrf',request.args.get('csrf')):
         abort(403)
     session.clear()

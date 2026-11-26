@@ -9,18 +9,18 @@
     <h1>Requests</h1>
 </div>
 
-<!-- Filter -->
 <form method="get" action="{{ url_for('org_requests') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
     <div>
         <label for="status" class="form-label">Status</label>
         <select id="status" name="status" class="form-select">
             <option value="">All</option>
-            {% for s in ['Assigned', 'Accepted', 'Rejected', 'Completed', 'Cancelled', 'Expired'] %}
-                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+            {% for s in ['Assigned', 'Accepted', 'Declined', 'Completed', 'Cancelled', 'Expired'] %}
+                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s | display_label }}</option>
             {% endfor %}
         </select>
     </div>
-    <button type="submit" class="btn-outline">Filter</button>
+    {% include 'components/list_controls.html' %}
+    <button type="submit" class="btn-outline">Apply filters</button>
 </form>
 
 {% if requests %}
@@ -30,7 +30,7 @@
                 <tr>
                     <th>Reference</th>
                     <th>Service</th>
-                    <th>Priority</th>
+                    <th>Preferred time frame</th>
                     <th>Status</th>
                     <th>Date</th>
                     <th>Action</th>
@@ -43,18 +43,17 @@
                         <td>{{ r.service_name }}<br><small>{{ r.details or "No description provided" }}</small></td>
                         <td>{{ priority_deadline(r) }}</td>
                         <td>{{ status_label(r.status) }}</td>
-                        <td>{{ r.created_at }}</td>
+                        <td>{{ r.created_at | display_time }}</td>
                         <td>
-                            <a href="{{ url_for('org_request_details', request_id=r.request_id) }}" class="me-2">View</a>
+                            <a href="{{ url_for('org_request_details', request_id=r.request_id, **pagination.current_query) }}" class="me-2">View</a>
 
-                            {# Accept / decline only for new referrals #}
                             {% if r.status == 'Assigned' and org_active and not r.is_overdue %}
                                 <form method="post" action="{{ url_for('org_respond', request_id=r.request_id) }}" class="d-inline" data-referral-action>
                                     <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
                                     <input type="hidden" name="referral_id" value="{{ r.referral_id }}">
-                                    <button type="submit" name="action" value="accept" class="btn-main btn-small">Accept</button>
+                                    <button type="submit" name="action" value="accept" class="btn-main btn-small">Accept referral</button>
                                     <button type="submit" name="action" value="reject" class="btn-danger-outline btn-small"
-                                            data-confirm="Reject this referral? A coordinator will review it for reassignment.">Reject</button>
+                                            data-confirm="Decline this referral? CareConnect will look for another eligible organization or refer the request to a coordinator.">Decline referral</button>
                                 </form>
                             {% endif %}
                         </td>
@@ -67,6 +66,7 @@
     <div class="note-box">No requests found.</div>
 {% endif %}
 
+{% include 'components/pagination.html' %}
 {% endblock %}
 
 {% block scripts %}

@@ -32,6 +32,8 @@ def verify(engine):
         raise RuntimeError('Capacity constraints are missing.')
     if not any(row.get('computed') for row in inspector.get_columns('referrals') if row['name']=='active_slot'):
         raise RuntimeError('The active-referral uniqueness column must be generated.')
+    if any(row['name']=='is_backup' for row in inspector.get_columns('referrals')):
+        raise RuntimeError('Legacy referral flag still present. Review migration 003 before starting writers.')
 
 
 if __name__=='__main__':

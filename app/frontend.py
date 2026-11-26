@@ -2,6 +2,7 @@
 from pathlib import Path
 from datetime import datetime, timezone
 import secrets
+import os
 
 from flask import Blueprint, abort, current_app, g, render_template, request, session, url_for
 from jinja2 import FileSystemLoader
@@ -11,7 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app import db
 from app.services.guest_requests import owned_request, service_choices
-from app.services.service_browsing import public_services
+from app.services.service_browsing import public_services, public_categories, SERVICE_SORTS
+from app.pagination import Pagination, search_term
 
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
@@ -19,8 +21,6 @@ frontend_bp = Blueprint("team_frontend", __name__,
                         static_folder=str(FRONTEND / "static"),
                         static_url_path="/team-static")
 
-# These are existing team navigation destinations, not implemented API handlers.
-# Generating their URLs must not manufacture authentication/dashboard behavior.
 PENDING_LINKS = {}
 
 
@@ -64,6 +64,7 @@ def render_team(template_name, **context):
     environment = current_app.jinja_env.overlay(
         loader=FileSystemLoader(str(FRONTEND / "templates")))
     environment.filters = dict(environment.filters, display_time=display_time)
+    environment.filters['display_label'] = display_label
     template = environment.get_template(template_name)
     return render_template(template, url_for=team_url_for, **context)
 
@@ -78,14 +79,33 @@ def display_time(value):
     return value.astimezone(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
 
 
-def firebase_web_config():
-    # Firebase web configuration is public, not an Admin credential or password.
-    # Values come from the teammate's reviewed client configuration.
+def display_label(value):
+    # Presentation only: keep SQL enums, form values, API and event contracts.
     return {
-        "apiKey": "AIzaSyC7ZQpLZmwCIoBo7cCGQPDPjFytildgrZc",
-        "authDomain": "careconnect-7132c.firebaseapp.com",
-        "projectId": "careconnect-7132c",
-        "appId": "1:57056102914:web:c4700cd8164e7b1538b51b",
+        'High': 'As soon as possible', 'Medium': 'Soon', 'Low': 'Flexible',
+        'Unmatched': 'Referred to coordinator', 'unmatched': 'Referred to coordinator',
+        'Escalated': 'Referred to coordinator', 'escalated': 'Referred to coordinator',
+        'Rejected referral': 'Declined referral', 'submitted': 'Request submitted',
+        'sent': 'Referral sent', 'accepted': 'Referral accepted', 'rejected': 'Referral declined',
+        'timed_out': 'Response window expired', 'attended': 'Service started',
+        'completed': 'Service completed', 'cancelled': 'Request cancelled',
+    }.get(value, value)
+
+
+def firebase_web_config():
+    # Firebase web configuration loaded from environment variables.
+    required = ('FIREBASE_WEB_API_KEY', 'FIREBASE_AUTH_DOMAIN', 'FIREBASE_PROJECT_ID', 'FIREBASE_APP_ID')
+    if any(not os.getenv(key) for key in required):
+        current_app.logger.error('Firebase web configuration is incomplete')
+        abort(503, description='Account services are temporarily unavailable. Please try again later.')
+    return {
+        "apiKey": os.environ["FIREBASE_WEB_API_KEY"],
+        "authDomain": os.environ["FIREBASE_AUTH_DOMAIN"],
+        "projectId": os.environ["FIREBASE_PROJECT_ID"],
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", ''),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", ''),
+        "appId": os.environ["FIREBASE_APP_ID"],
+        "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID", ''),
     }
 
 
@@ -107,47 +127,46 @@ def organization_registration_page():
     return render_team("auth/register_organization.html", firebase_web_config=firebase_web_config())
 
 
+def verification_page():
+    return render_team('auth/verify_email.html', firebase_web_config=firebase_web_config())
+
+
 def home_page():
     return render_team("public/home.html")
 
 
-def render_browse(services, *, error=None, status=200):
-    from app.services.guest_requests import DELIVERY
-    search=request.args.get('search','').strip()
-    category=request.args.get('category','')
-    delivery=request.args.get('delivery','')
-    filtered=[row for row in services if
-              (not category or row['category']==category) and
-              (not delivery or row['delivery_method']==delivery) and
-              (not search or search.casefold() in ' '.join(
-                  str(row[key]) for key in ('service_name','category','description','org_name','area')).casefold())]
-    return render_team('public/browse_services.html',services=filtered,
-                       categories=sorted({row['category'] for row in services}),
-                       delivery_methods=list(DELIVERY.values()),search=search,
-                       selected_category=category,selected_delivery=delivery,form_error=error),status
-
-
 def browse_services_page():
+    from app.services.guest_requests import DELIVERY
+    pagination = Pagination.from_request(SERVICE_SORTS, 'name')
+    search = search_term()
+    category = request.args.get('category', '')
+    delivery = request.args.get('delivery', '')
+    error, status = None, 200
     try:
         with Session(db.engine) as database:
-            services=public_services(database)
+            services = public_services(database, pagination=pagination, search=search, category=category, delivery=delivery)
+            categories = public_categories(database)
     except SQLAlchemyError:
         current_app.logger.error('Public service catalog unavailable')
-        return render_browse([],error='Services could not be loaded. Please try again later.',status=503)
-    return render_browse(services)
+        services, categories = [], []
+        error, status = 'Services could not be loaded. Please try again later.', 503
+    return render_team('public/browse_services.html', services=services, categories=categories,
+                       delivery_methods=list(DELIVERY.values()), search=search,
+                       selected_category=category, selected_delivery=delivery,
+                       form_error=error, pagination=pagination), status
 
 
 def service_details_page(service_id):
+    listing = Pagination.from_request(SERVICE_SORTS, 'name', endpoint='browse_services')
     try:
         with Session(db.engine) as database:
-            services=public_services(database)
+            services = public_services(database, service_id=service_id)
     except SQLAlchemyError:
         current_app.logger.error('Public service details unavailable')
-        return render_browse([],error='Services could not be loaded. Please try again later.',status=503)
-    service=next((row for row in services if row['service_id']==service_id),None)
-    if service is None:
+        abort(503, description='Service details could not be loaded. Please try again later.')
+    if not services:
         abort(404)
-    return render_team('public/service_details.html',service=service)
+    return render_team('public/service_details.html', service=services[0], back_url=listing.url(listing.page))
 
 
 def request_page(error=None, status=200):
@@ -197,6 +216,7 @@ def register_frontend(app):
                      view_func=individual_registration_page)
     app.add_url_rule("/register/organization", endpoint="register_organization",
                      view_func=organization_registration_page)
+    app.add_url_rule('/register/verify', endpoint='verify_email', view_func=verification_page)
     app.add_url_rule("/", endpoint="home", view_func=home_page)
     app.add_url_rule("/services", endpoint="browse_services", view_func=browse_services_page)
     app.add_url_rule("/services/<int:service_id>", endpoint="service_details", view_func=service_details_page)
@@ -206,6 +226,6 @@ def register_frontend(app):
 
     @app.after_request
     def private_guest_pages(response):
-        if request.path.startswith(("/services", "/get-connected", "/api/guest/requests", "/register/individual", "/register/organization")):
+        if request.path.startswith(("/services", "/get-connected", "/api/guest/requests", "/register/")):
             response.headers["Cache-Control"] = "no-store"
         return response

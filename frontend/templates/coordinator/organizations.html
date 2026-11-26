@@ -9,18 +9,18 @@
     <h1>Organizations</h1>
 </div>
 
-<!-- Filter -->
 <form method="get" action="{{ url_for('coord_organizations') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
     <div>
         <label for="status" class="form-label">Status</label>
         <select id="status" name="status" class="form-select">
             <option value="">All</option>
             {% for s in ['Active', 'Pending', 'Suspended', 'Rejected'] %}
-                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s | display_label }}</option>
             {% endfor %}
         </select>
     </div>
-    <button type="submit" class="btn-outline">Filter</button>
+    {% include 'components/list_controls.html' %}
+    <button type="submit" class="btn-outline">Apply filters</button>
 </form>
 
 {% if orgs %}
@@ -44,7 +44,7 @@
                                     <div class="detail-row"><dt>Contact person</dt><dd>{{ o.contact_name }}</dd></div>
                                     <div class="detail-row"><dt>Phone</dt><dd>{{ o.phone }}</dd></div>
                                     <div class="detail-row"><dt>Location</dt><dd>{{ o.address }}, {{ o.city }}</dd></div>
-                                    <div class="detail-row"><dt>Applied on</dt><dd>{{ o.created_at }}</dd></div>
+                                    <div class="detail-row"><dt>Applied on</dt><dd>{{ o.created_at | display_time }}</dd></div>
                                 </dl>
                             </details>
                         </td>
@@ -77,4 +77,5 @@
     <div class="note-box">No organizations found.</div>
 {% endif %}
 
+{% include 'components/pagination.html' %}
 {% endblock %}

@@ -3,6 +3,13 @@ from sqlalchemy import text
 
 from app.services.notifications import notify
 from app.services.outbox import utcnow
+from app.pagination import page_rows
+
+APPLICATION_SORTS = {
+    'oldest': ('Oldest applications first', 'a.application_id ASC'),
+    'newest': ('Newest applications first', 'a.application_id DESC'),
+    'name': ('Organization: A to Z', 'o.name ASC,a.application_id ASC'),
+}
 
 
 class ApprovalError(Exception):
@@ -11,8 +18,8 @@ class ApprovalError(Exception):
         self.status=status
 
 
-def pending_applications(database):
-    rows=database.execute(text('''
+def pending_applications(database, *, pagination=None, limit=5):
+    sql='''
         SELECT a.application_id,o.organization_id AS org_id,o.name AS org_name,
                o.contact_email AS email,o.contact_phone AS phone,o.city AS service_area,
                a.created_at,rep.full_name AS representative_name,mp.first_name,mp.last_name
@@ -23,8 +30,11 @@ def pending_applications(database):
         WHERE o.status='pending' AND a.status IN ('submitted','under_review')
           AND a.application_id=(SELECT latest.application_id FROM organization_applications latest
               WHERE latest.organization_id=o.organization_id ORDER BY latest.application_id DESC LIMIT 1)
-        ORDER BY a.application_id
-    ''')).mappings().all()
+    '''
+    if pagination:
+        rows=page_rows(database,sql,{},pagination)
+    else:
+        rows=database.execute(text(sql+' ORDER BY a.application_id LIMIT :limit'),{'limit':limit}).mappings().all()
     return [dict(row,contact_name=row['representative_name'] or
                  ((row['first_name'] or '')+' '+(row['last_name'] or '')).strip() or '-') for row in rows]
 

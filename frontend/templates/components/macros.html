@@ -1,18 +1,12 @@
-{#
-    Small reusable pieces.
-    Use in a page like this:
-        {% from 'components/macros.html' import status_label %}
-        {{ status_label(r.status) }}
-#}
 
-{# Colored label for a status like Pending, Accepted, Active... #}
+
 {% macro status_label(text) %}
-    <span class="status status-{{ text | lower | replace(' ', '-') }}">{{ text }}</span>
+    <span class="status status-{{ text | lower | replace(' ', '-') }}">{{ text | display_label }}</span>
 {% endmacro %}
 
 {% macro priority_deadline(req) %}
-    {{ status_label(req.priority) }} <small>({{ req.priority_hours }} h)</small>
-    <span class="deadline">Response due: {{ req.response_deadline | display_time }}</span>
+    {{ status_label(req.priority) }} <small>({{ req.priority_hours }} h service target)</small>
+    <span class="deadline">Organization response due: {{ req.response_deadline | display_time }}</span>
 {% endmacro %}
 
 {% macro status_history(req) %}
@@ -20,7 +14,7 @@
     <ol class="timeline" aria-label="Request status history">
         {% for step in req.history %}
             <li {% if loop.last %}aria-current="step"{% endif %}>
-                {{ step.text }}<br><small>{{ step.time | display_time }}</small>
+                {{ step.text | display_label }}<br><small>{{ step.time | display_time }}</small>
             </li>
         {% endfor %}
     </ol>

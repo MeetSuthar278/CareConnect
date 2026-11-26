@@ -1,5 +1,4 @@
-/* CareConnect: shared Coffee & Charcoal theme for every Flask page.
-   Bootstrap supplies the grid and interactive components. */
+/* Shared theme; Bootstrap supplies layout and interactive components. */
 :root {
     --white: #FFFFFF;
     --text: #1C1C1C;
@@ -85,7 +84,7 @@ a:hover { color: var(--text); }
     margin-bottom: 0.65rem;
 }
 
-/* Shared header; each role retains its existing navigation. */
+/* Role navigation. */
 .site-nav {
     padding: 1rem 0;
     border-bottom: 1px solid var(--border);
@@ -153,7 +152,7 @@ a:hover { color: var(--text); }
 }
 .notification-item:last-child { border-bottom: 0; }
 
-/* All action buttons share sizing, typography and square corners. */
+/* Shared button styles. */
 .btn-main, .btn-outline, .btn-danger-outline {
     display: inline-block;
     padding: 0.65rem 1.25rem;
@@ -204,10 +203,16 @@ a.box-link:hover { border-color: var(--coffee); }
 .hero-buttons { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1.5rem; }
 .guest-line { margin-top: 1.25rem; }
 
-/* Forms preserve their existing controls, IDs and submission behavior. */
+/* Forms. */
 .form-box { max-width: 560px; margin: 0 auto; }
 .form-box-wide { max-width: 760px; margin: 0 auto; }
+.list-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-top: 1.25rem; }
+.page-link { color: var(--espresso); min-height: 44px; padding: 0.6rem 0.85rem; }
+.page-link:hover { color: var(--text); background-color: var(--border); }
+.page-link[aria-current="page"] { color: var(--white); background-color: var(--espresso); }
+[hidden] { display: none !important; }
 .form-label { font-size: 0.95rem; font-weight: 500; }
+.required-marker { color: var(--coffee); font-size: 0.8em; font-weight: 400; }
 .form-control, .form-select {
     min-height: 44px;
     padding: 0.6rem 0.75rem;
@@ -231,6 +236,17 @@ a.box-link:hover { border-color: var(--coffee); }
 .form-check-input:checked { background-color: var(--espresso); border-color: var(--espresso); }
 input[type="radio"], input[type="checkbox"] { accent-color: var(--espresso); }
 .form-hint { margin-top: 0.35rem; font-size: 0.875rem; }
+.password-requirements {
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+    color: #6c757d;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+.password-requirements li { display: flex; align-items: baseline; gap: 0.4rem; }
+.password-requirements [data-requirement-icon] { flex: 0 0 1em; text-align: center; }
+.password-requirements .is-satisfied { color: var(--bs-success, #198754); }
 .form-section-title {
     margin: 1.5rem 0 0.8rem;
     padding-bottom: 0.5rem;

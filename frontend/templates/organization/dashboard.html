@@ -12,11 +12,14 @@
     <div>Account status: {{ status_label(org.status) }}</div>
 </div>
 
-{# Message shown until the coordinator approves the organization #}
 {% if org.status == 'Pending' %}
     <div class="note-box mb-4">
         <strong>Waiting for approval.</strong>
         A coordinator is checking your organization. You will not get requests until you are approved.
+    </div>
+{% elif org.status == 'Rejected' %}
+    <div class="note-box mb-4">
+        <strong>Your application was rejected.</strong> Review your notifications or contact a coordinator for the reason. Email verification does not approve an organization.
     </div>
 {% elif org.status == 'Suspended' %}
     <div class="note-box mb-4">
@@ -24,7 +27,6 @@
     </div>
 {% endif %}
 
-<!-- Numbers -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="box">
@@ -52,10 +54,9 @@
     </div>
 </div>
 
-<!-- Newest requests -->
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h2 class="mb-0">Incoming referrals</h2>
-    <a href="{{ url_for('org_requests') }}">See all</a>
+    {% if org.raw_status != 'pending' %}<a href="{{ url_for('org_requests') }}">See all referrals</a>{% endif %}
 </div>
 
 {% if requests %}
@@ -65,7 +66,7 @@
                 <tr>
                     <th>Reference</th>
                     <th>Service</th>
-                    <th>Priority</th>
+                    <th>Preferred time frame</th>
                     <th>Status</th>
                     <th><span class="visually-hidden">Actions</span></th>
                 </tr>

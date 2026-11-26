@@ -11,7 +11,6 @@
     </div>
 </div>
 
-<!-- Numbers -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <a href="{{ url_for('coord_approvals') }}" class="box box-link">
@@ -22,13 +21,13 @@
     <div class="col-6 col-md-3">
         <a href="{{ url_for('coord_requests', attention='Unmatched') }}" class="box box-link">
             <p class="stat-number">{{ counts.unmatched }}</p>
-            <p class="stat-label">Unmatched requests</p>
+            <p class="stat-label">Referred to coordinator</p>
         </a>
     </div>
     <div class="col-6 col-md-3">
         <a href="{{ url_for('coord_requests', attention='Overdue') }}" class="box box-link">
             <p class="stat-number">{{ counts.overdue }}</p>
-            <p class="stat-label">Overdue requests</p>
+            <p class="stat-label">Past service target</p>
         </a>
     </div>
     <div class="col-6 col-md-3">
@@ -41,7 +40,6 @@
 
 <div class="row g-4">
 
-    <!-- Organizations waiting -->
     <div class="col-12 col-lg-6">
         <h2>Waiting for approval</h2>
         {% if pending_orgs %}
@@ -66,9 +64,8 @@
         {% endif %}
     </div>
 
-    <!-- Requests that need attention -->
     <div class="col-12 col-lg-6">
-        <h2>Needs attention</h2>
+        <h2>Recent requests needing attention</h2>
         {% if attention_requests %}
             <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
                 <table class="table">
@@ -78,7 +75,7 @@
                     <tbody>
                         {% for r in attention_requests %}
                             <tr>
-                                <td><a href="{{ url_for('coord_requests', _anchor='request-' ~ r.request_id) }}">{{ r.reference }}</a></td>
+                                <td><a href="{{ url_for('coordinator.request_details', request_id=r.request_id) }}">{{ r.reference }}</a></td>
                                 <td>{{ r.service_name }}<br>{{ priority_deadline(r) }}</td>
                                 <td>{% for reason in r.attention_reasons %}<span class="attention-label">{{ status_label(reason) }}</span>{% endfor %}</td>
                             </tr>
