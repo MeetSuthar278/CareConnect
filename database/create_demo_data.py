@@ -17,7 +17,7 @@ def main():
         if any(c.execute(text("SELECT COUNT(*) FROM `" + t + "`")).scalar() for t in tables):
             raise RuntimeError("Database is not empty; stopped without changing existing records")
         c.execute(text("INSERT INTO roles(role_id,role_name) VALUES(1,'member'),(2,'representative'),(3,'coordinator')"))
-        # No login feature yet: random passwords are hashed and not exposed.
+        # Synthetic accounts use random, undisclosed passwords.
         for uid, role, email in [(9,1,"member@careconnect.example.test"),
                                  (1,3,"coordinator@careconnect.example.test"),
                                  (4,2,"partner-a@careconnect.example.test"),
