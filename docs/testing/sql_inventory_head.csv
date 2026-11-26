@@ -1,0 +1,1025 @@
+﻿query_number,query_name,source_file,sql_statement_or_sqlalchemy_equivalent,query_category,inventory_group,business_purpose,application_feature,verification_status,counted,variants_and_optional_clauses
+Q001,"Question 1 Eligible partners by service area and time frame: SELECT organizations, organization_services, services, service_areas, service_priority_support, priority_levels",database/queries.sql:20 (Question 1 Eligible partners by service area and time frame),"SELECT
+    o.organization_id,
+    o.name AS organization_name,
+    s.name AS service_name,
+    sa.region_name AS service_area,
+    pl.level_name AS supported_priority,
+    pl.deadline_hours,
+    os.status AS service_offering_status,
+    os.active_referral_limit,
+    os.current_active_referrals,
+    (os.active_referral_limit - os.current_active_referrals) AS available_slots
+FROM organizations o
+JOIN organization_services os
+    ON o.organization_id = os.organization_id
+JOIN services s
+    ON os.service_id = s.service_id
+JOIN service_areas sa
+    ON os.service_area_id = sa.area_id
+JOIN service_priority_support sps
+    ON os.organization_service_id = sps.organization_service_id
+JOIN priority_levels pl
+    ON sps.priority_id = pl.priority_id
+WHERE o.status = 'approved'
+  AND os.status = 'active'
+  AND sps.is_supported = TRUE
+  AND s.service_id = 1
+  AND sa.area_id = 1
+  AND pl.level_name = 'High'
+ORDER BY available_slots DESC",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 1 Eligible partners by service area and time frame,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q002,"Question 2 Partner workload and remaining capacity: SELECT organization_services, organizations, services, service_areas",database/queries.sql:56 (Question 2 Partner workload and remaining capacity),"SELECT
+    o.organization_id,
+    o.name AS organization_name,
+    s.name AS service_name,
+    sa.region_name AS area_name,
+    os.current_active_referrals,
+    os.active_referral_limit,
+    (os.active_referral_limit - os.current_active_referrals) AS remaining_capacity
+FROM organization_services os
+JOIN organizations o
+    ON os.organization_id = o.organization_id
+JOIN services s
+    ON os.service_id = s.service_id
+JOIN service_areas sa
+    ON os.service_area_id = sa.area_id
+WHERE o.status = 'approved'
+  AND os.status = 'active'
+  AND os.current_active_referrals < os.active_referral_limit
+ORDER BY os.current_active_referrals ASC, remaining_capacity DESC
+LIMIT 5",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 2 Partner workload and remaining capacity,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q003,"Question 3 Attendance deadline breaches and responsible referrals: SELECT attendance_records, service_requests, priority_levels, referrals, organizations",database/queries.sql:83 (Question 3 Attendance deadline breaches and responsible referrals),"SELECT
+    sr.request_id,
+    sr.title AS request_title,
+    pl.level_name AS priority,
+    sr.attendance_deadline,
+    ar.first_attended_at,
+    TIMESTAMPDIFF(MINUTE, sr.attendance_deadline, ar.first_attended_at) AS delay_minutes,
+    ref.referral_id,
+    ref.attempt_number,
+    ref.is_backup,
+    o.name AS responsible_organization,
+    ar.notes AS attendance_notes
+FROM attendance_records ar
+JOIN service_requests sr
+    ON ar.request_id = sr.request_id
+JOIN priority_levels pl
+    ON sr.priority_id = pl.priority_id
+JOIN referrals ref
+    ON ar.referral_id = ref.referral_id
+JOIN organizations o
+    ON ref.organization_id = o.organization_id
+WHERE ar.is_on_time = FALSE
+   OR ar.first_attended_at > sr.attendance_deadline
+ORDER BY delay_minutes DESC",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 3 Attendance deadline breaches and responsible referrals,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q004,"Question 4 Partner referral acceptance decline and timeout statistics: SELECT organizations, referrals",database/queries.sql:113 (Question 4 Partner referral acceptance decline and timeout statistics),"SELECT
+    o.organization_id,
+    o.name AS organization_name,
+    COUNT(r.referral_id) AS total_referrals_sent,
+    SUM(CASE WHEN r.status IN ('accepted', 'attended', 'completed') THEN 1 ELSE 0 END) AS accepted_count,
+    SUM(CASE WHEN r.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
+    SUM(CASE WHEN r.status = 'timed_out' THEN 1 ELSE 0 END) AS timed_out_count,
+    ROUND(
+        (SUM(CASE WHEN r.status IN ('accepted', 'attended', 'completed') THEN 1 ELSE 0 END) * 100.0) /
+        NULLIF(COUNT(r.referral_id), 0), 1
+    ) AS acceptance_rate_percent
+FROM organizations o
+LEFT JOIN referrals r
+    ON o.organization_id = r.organization_id
+    AND r.created_at >= '2026-10-01 00:00:00'
+GROUP BY o.organization_id, o.name
+ORDER BY total_referrals_sent DESC",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 4 Partner referral acceptance decline and timeout statistics,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q005,"Question 5 Partner on-time attendance rate: SELECT organizations, referrals, attendance_records",database/queries.sql:137 (Question 5 Partner on-time attendance rate),"SELECT
+    o.organization_id,
+    o.name AS organization_name,
+    COUNT(ar.attendance_id) AS total_attended_requests,
+    SUM(CASE WHEN ar.is_on_time = TRUE THEN 1 ELSE 0 END) AS on_time_attendances,
+    SUM(CASE WHEN ar.is_on_time = FALSE THEN 1 ELSE 0 END) AS late_attendances,
+    ROUND(
+        (SUM(CASE WHEN ar.is_on_time = TRUE THEN 1 ELSE 0 END) * 100.0) /
+        NULLIF(COUNT(ar.attendance_id), 0), 2
+    ) AS on_time_attendance_rate_percent
+FROM organizations o
+JOIN referrals r
+    ON o.organization_id = r.organization_id
+JOIN attendance_records ar
+    ON r.referral_id = ar.referral_id
+GROUP BY o.organization_id, o.name
+ORDER BY on_time_attendance_rate_percent DESC, total_attended_requests DESC",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 5 Partner on-time attendance rate,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q006,"Question 6 Community demand by category area and time frame: SELECT service_requests, services, service_categories, service_areas, priority_levels",database/queries.sql:161 (Question 6 Community demand by category area and time frame),"SELECT
+    sc.name AS service_category,
+    sa.region_name AS service_area,
+    pl.level_name AS priority_level,
+    COUNT(sr.request_id) AS request_count
+FROM service_requests sr
+JOIN services s
+    ON sr.service_id = s.service_id
+JOIN service_categories sc
+    ON s.category_id = sc.category_id
+JOIN service_areas sa
+    ON sr.service_area_id = sa.area_id
+JOIN priority_levels pl
+    ON sr.priority_id = pl.priority_id
+GROUP BY sc.name, sa.region_name, pl.level_name
+ORDER BY request_count DESC, sc.name ASC",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 6 Community demand by category area and time frame,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q007,"Question 7 Requests rescued by backup partners: SELECT referrals, service_requests, organizations",database/queries.sql:184 (Question 7 Requests rescued by backup partners),"SELECT
+    COUNT(DISTINCT sr.request_id) AS total_rescued_requests,
+    GROUP_CONCAT(DISTINCT CONCAT('Request #', sr.request_id, ' (', o_rescue.name, ')') SEPARATOR '; ') AS rescued_details
+FROM referrals r_rescue
+JOIN service_requests sr
+    ON r_rescue.request_id = sr.request_id
+JOIN organizations o_rescue
+    ON r_rescue.organization_id = o_rescue.organization_id
+WHERE r_rescue.is_backup = TRUE
+  AND r_rescue.attempt_number > 1
+  AND r_rescue.status IN ('accepted', 'attended', 'completed')
+  AND r_rescue.created_at >= '2026-10-01 00:00:00'",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 7 Requests rescued by backup partners,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q008,"Question 7 detail Primary failure and successful backup history: SELECT service_requests, referrals, organizations, attendance_records",database/queries.sql:199 (Question 7 detail Primary failure and successful backup history),"SELECT
+    sr.request_id,
+    sr.title AS request_title,
+    o_initial.name AS failed_primary_partner,
+    r_initial.status AS primary_failure_status,
+    o_rescue.name AS rescue_partner,
+    r_rescue.status AS rescue_status,
+    ar.first_attended_at,
+    ar.is_on_time
+FROM service_requests sr
+JOIN referrals r_initial
+    ON sr.request_id = r_initial.request_id AND r_initial.attempt_number = 1
+JOIN organizations o_initial
+    ON r_initial.organization_id = o_initial.organization_id
+JOIN referrals r_rescue
+    ON sr.request_id = r_rescue.request_id AND r_rescue.attempt_number > 1
+JOIN organizations o_rescue
+    ON r_rescue.organization_id = o_rescue.organization_id
+LEFT JOIN attendance_records ar
+    ON sr.request_id = ar.request_id
+WHERE r_initial.status IN ('timed_out', 'rejected')
+  AND r_rescue.status IN ('accepted', 'attended', 'completed')",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 7 detail Primary failure and successful backup history,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q009,"Question 8 Negative feedback by organization and service: SELECT feedback, service_requests, services, organizations",database/queries.sql:228 (Question 8 Negative feedback by organization and service),"SELECT
+    o.organization_id,
+    o.name AS organization_name,
+    s.name AS service_name,
+    COUNT(f.feedback_id) AS total_feedback_received,
+    SUM(CASE WHEN f.is_helpful = FALSE THEN 1 ELSE 0 END) AS not_helpful_count,
+    ROUND(AVG(f.rating), 2) AS average_rating,
+    GROUP_CONCAT(f.comment SEPARATOR ' | ') AS member_comments
+FROM feedback f
+JOIN service_requests sr
+    ON f.request_id = sr.request_id
+JOIN services s
+    ON sr.service_id = s.service_id
+JOIN organizations o
+    ON f.organization_id = o.organization_id
+WHERE f.is_helpful = FALSE
+GROUP BY o.organization_id, o.name, s.name
+HAVING not_helpful_count >= 1
+ORDER BY not_helpful_count DESC",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Question 8 Negative feedback by organization and service,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q010,"Bonus SDG 17 network impact aggregates: SELECT organizations, service_requests, referrals, attendance_records, feedback",database/queries.sql:253 (Bonus SDG 17 network impact aggregates),"SELECT
+    (SELECT COUNT(*) FROM organizations WHERE status = 'approved') AS total_approved_partners,
+    (SELECT COUNT(*) FROM service_requests) AS total_community_requests,
+    (SELECT COUNT(*) FROM referrals WHERE is_backup = TRUE AND status IN ('accepted', 'attended', 'completed')) AS requests_rescued_by_backups,
+    ROUND(
+        (SELECT COUNT(*) FROM attendance_records WHERE is_on_time = TRUE) * 100.0 /
+        NULLIF((SELECT COUNT(*) FROM attendance_records), 0), 1
+    ) AS network_on_time_attendance_rate_percent,
+    ROUND(
+        (SELECT COUNT(*) FROM feedback WHERE is_helpful = TRUE) * 100.0 /
+        NULLIF((SELECT COUNT(*) FROM feedback), 0), 1
+    ) AS positive_feedback_satisfaction_percent",DQL,Academic demonstration,Demonstrate the preserved standalone analytical/operational question; nested subqueries are part of this statement.,queries.Bonus SDG 17 network impact aggregates,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q011,create app: SELECT,app/__init__.py:55 (create_app); app/__init__.py:55 (database_health),SELECT 1,DQL,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",__init__.create_app; __init__.database_health,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q012,main: SET,database/create_demo_data.py:13 (main),SET time_zone = '+00:00',Control,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q013,main: SHOW,database/create_demo_data.py:14 (main),SHOW TABLES,Control,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q014,main: SELECT,database/create_demo_data.py:17 (main),SELECT COUNT(*) FROM `{t}`,DQL,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q015,USE,database/queries.sql:11 (); database/schema.sql:14 (); database/schema_safe.sql:1 (); database/seed.sql:9 (); teammate_review/dhairya/001_firebase_auth.sql:2 (),USE careconnect_db,Control,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",queries; schema; schema_safe; seed; 001_firebase_auth,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q016,DROP,database/schema.sql:9 (),DROP DATABASE IF EXISTS careconnect_db,DDL,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",schema,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q017,CREATE,database/schema.sql:10 (),"CREATE DATABASE careconnect_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci",DDL,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",schema,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q018,SET,database/schema.sql:19 (); database/schema_safe.sql:5 (); database/seed.sql:11 (),SET FOREIGN_KEY_CHECKS = 0,Control,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",schema; schema_safe; seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q019,SET,database/schema.sql:415 (); database/schema_safe.sql:401 (); database/seed.sql:34 (),SET FOREIGN_KEY_CHECKS = 1,Control,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",schema; schema_safe; seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q020,DELETE notifications,database/seed.sql:13 (),DELETE FROM notifications,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q021,DELETE feedback,database/seed.sql:14 (),DELETE FROM feedback,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q022,DELETE service_completions,database/seed.sql:15 (),DELETE FROM service_completions,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q023,DELETE attendance_records,database/seed.sql:16 (),DELETE FROM attendance_records,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q024,DELETE referral_status_history,database/seed.sql:17 (),DELETE FROM referral_status_history,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q025,DELETE referrals,database/seed.sql:18 (),DELETE FROM referrals,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q026,DELETE service_requests,database/seed.sql:19 (),DELETE FROM service_requests,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q027,DELETE organization_availability,database/seed.sql:20 (),DELETE FROM organization_availability,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q028,DELETE service_priority_support,database/seed.sql:21 (),DELETE FROM service_priority_support,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q029,DELETE organization_services,database/seed.sql:22 (),DELETE FROM organization_services,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q030,DELETE priority_levels,database/seed.sql:23 (),DELETE FROM priority_levels,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q031,DELETE service_areas,database/seed.sql:24 (),DELETE FROM service_areas,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q032,DELETE services,database/seed.sql:25 (),DELETE FROM services,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q033,DELETE service_categories,database/seed.sql:26 (),DELETE FROM service_categories,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q034,DELETE organization_applications,database/seed.sql:27 (),DELETE FROM organization_applications,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q035,DELETE organization_representatives,database/seed.sql:28 (),DELETE FROM organization_representatives,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q036,DELETE organizations,database/seed.sql:29 (),DELETE FROM organizations,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q037,DELETE member_profiles,database/seed.sql:30 (),DELETE FROM member_profiles,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q038,DELETE users,database/seed.sql:31 (),DELETE FROM users,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q039,DELETE roles,database/seed.sql:32 (),DELETE FROM roles,DML,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q040,main: SELECT referrals,tools/complete_referral_demo.py:42 (main),SELECT request_id FROM referrals WHERE referral_id=:id,DQL,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",complete_referral_demo.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q041,main: SELECT service_requests,tools/feedback_demo.py:40 (main),"SELECT member_id,status FROM service_requests WHERE request_id=:id",DQL,Ancillary/control,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",feedback_demo.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q042,"resolve identity: SELECT users, roles",app/auth.py:112 (resolve_identity); app/services/organization_registration.py:33 (register_organization),"
+            SELECT u.user_id, u.email, u.is_active, r.role_name
+            FROM users u JOIN roles r ON r.role_id = u.role_id
+            WHERE u.firebase_uid = :uid
+        ",DQL,Application,"Resolve verified identity, SQL-owned roles and organization membership without email-only linking.",auth.resolve_identity; organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q043,resolve identity: SELECT users,app/auth.py:118 (resolve_identity); app/services/guest_requests.py:118 (create_guest_request); app/services/organization_registration.py:57 (register_organization),SELECT user_id FROM users WHERE email = :email,DQL,Application,"Resolve verified identity, SQL-owned roles and organization membership without email-only linking.",auth.resolve_identity; guest_requests.create_guest_request; organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q044,resolve identity: SELECT roles,app/auth.py:121 (resolve_identity); app/services/guest_requests.py:121 (create_guest_request); app/services/organization_registration.py:62 (register_organization),SELECT role_id FROM roles WHERE role_name = 'member',DQL,Application,"Resolve verified identity, SQL-owned roles and organization membership without email-only linking.",auth.resolve_identity; guest_requests.create_guest_request; organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q045,resolve identity: INSERT users,app/auth.py:126 (resolve_identity); app/services/organization_registration.py:65 (register_organization),"
+                INSERT INTO users (role_id, email, firebase_uid, password_hash, is_active)
+                VALUES (:role, :email, :uid, NULL, TRUE)
+            ",DML,Application,"Resolve verified identity, SQL-owned roles and organization membership without email-only linking.",auth.resolve_identity; organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q046,resolve identity: SELECT organization_representatives,app/auth.py:139 (resolve_identity),"
+                SELECT organization_id FROM organization_representatives
+                WHERE user_id = :id
+            ",DQL,Application,"Resolve verified identity, SQL-owned roles and organization membership without email-only linking.",auth.resolve_identity,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q047,get services: SELECT,app/catalog.py:12 (get_services),db.session.query(Service).filter_by(is_active=True).order_by(Service.service_id).all(),DQL,Application,Read active catalog reference choices for existing API contracts.,catalog.get_services,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q048,get areas: SELECT,app/catalog.py:27 (get_areas),db.session.query(ServiceArea).filter_by(is_active=True).order_by(ServiceArea.area_id).all(),DQL,Application,Read active catalog reference choices for existing API contracts.,catalog.get_areas,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q049,get priorities: SELECT,app/catalog.py:46 (get_priorities),db.session.query(PriorityLevel).order_by(PriorityLevel.priority_id).all(),DQL,Application,Read active catalog reference choices for existing API contracts.,catalog.get_priorities,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q050,"coordinator identity: SELECT users, roles",app/coordinator.py:26 (coordinator_identity),"SELECT u.user_id FROM users u
+        JOIN roles r ON r.role_id=u.role_id WHERE {'u.firebase_uid=:id' if uid is not None else 'u.user_id=:id'}
+        AND u.is_active=TRUE AND r.role_name='coordinator'
+    ",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.coordinator_identity,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q051,"request rows: SELECT feedback, service_requests, services, service_categories, priority_levels, users, member_profiles, referrals, organizations, attendance_records",app/coordinator.py:96 (request_rows),"
+        SELECT sr.request_id,sr.status AS raw_status,sr.created_at,sr.description AS details,
+               sr.attendance_deadline,s.name AS service_name,s.delivery_mode,c.name AS category,
+               p.level_name AS priority,p.deadline_hours AS priority_hours,
+               r.response_deadline,r.status AS referral_status,r.organization_id AS org_id,o.name AS org_name,
+               u.email AS contact_email,(u.firebase_uid IS NULL) AS is_guest,
+               mp.first_name,mp.last_name,mp.phone AS contact_phone,mp.address AS contact_address,mp.city AS contact_city,
+               (sr.attendance_deadline < :now AND a.attendance_id IS NULL
+                 AND sr.status NOT IN ('completed','cancelled')) AS overdue,
+               EXISTS(SELECT 1 FROM feedback f WHERE f.request_id=sr.request_id AND f.is_helpful=FALSE) AS negative_feedback
+        FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+        LEFT JOIN service_categories c ON c.category_id=s.category_id
+        JOIN priority_levels p ON p.priority_id=sr.priority_id
+        JOIN users u ON u.user_id=sr.member_id LEFT JOIN member_profiles mp ON mp.user_id=u.user_id
+        LEFT JOIN referrals r ON r.referral_id=(SELECT latest.referral_id FROM referrals latest
+            WHERE latest.request_id=sr.request_id ORDER BY latest.attempt_number DESC LIMIT 1)
+        LEFT JOIN organizations o ON o.organization_id=r.organization_id
+        LEFT JOIN attendance_records a ON a.request_id=sr.request_id
+        ORDER BY sr.request_id DESC
+    ",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.request_rows,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q052,"request rows: SELECT referral_status_history, referrals",app/coordinator.py:116 (request_rows),"
+        SELECT r.request_id,h.new_status AS text,h.changed_at AS time
+        FROM referral_status_history h JOIN referrals r ON r.referral_id=h.referral_id
+        ORDER BY h.changed_at,h.history_id
+    ",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.request_rows,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q053,notifications: SELECT notifications,app/coordinator.py:143 (notifications); app/member.py:146 (dashboard); app/member.py:162 (render_profile); app/organization.py:125 (notifications),"SELECT message,created_at AS time FROM notifications
+        WHERE user_id=:id AND is_read=FALSE ORDER BY notification_id DESC LIMIT 20",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.notifications; member.dashboard; member.render_profile; organization.notifications,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q054,"organizations page: SELECT organizations, organization_applications, member_profiles",app/coordinator.py:177 (organizations_page),"
+            SELECT o.organization_id AS org_id,o.name AS org_name,o.status AS raw_status,
+                   o.contact_email AS email,o.contact_phone AS phone,o.address,o.city,
+                   COALESCE(a.created_at,o.created_at) AS created_at,a.status AS application_status,
+                   mp.first_name,mp.last_name
+            FROM organizations o LEFT JOIN organization_applications a ON a.application_id=(
+                SELECT latest.application_id FROM organization_applications latest
+                WHERE latest.organization_id=o.organization_id ORDER BY latest.application_id DESC LIMIT 1)
+            LEFT JOIN member_profiles mp ON mp.user_id=a.submitted_by_user_id
+            ORDER BY o.name,o.organization_id
+        ",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.organizations_page,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q055,"organizations page: SELECT organization_services, service_areas",app/coordinator.py:188 (organizations_page),"
+            SELECT os.organization_id,os.service_id,sa.region_name,sa.city
+            FROM organization_services os JOIN service_areas sa ON sa.area_id=os.service_area_id
+            ORDER BY os.organization_id,sa.region_name,sa.city
+        ",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.organizations_page,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q056,"organizations page: SELECT organization_representatives, users, roles",app/coordinator.py:193 (organizations_page),"
+            SELECT rep.organization_id,rep.full_name FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE u.is_active=TRUE AND r.role_name='representative'
+            ORDER BY rep.organization_id,rep.is_primary_contact DESC,rep.user_id
+        ",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.organizations_page,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q057,requests page: SELECT organizations,app/coordinator.py:273 (requests_page),"SELECT organization_id AS org_id,name AS org_name FROM organizations ORDER BY name",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.requests_page,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q058,requests page: SELECT priority_levels,app/coordinator.py:274 (requests_page); app/frontend.py:163 (request_page),"SELECT level_name,deadline_hours FROM priority_levels ORDER BY priority_id",DQL,Application,"Review all requests, organizations, attention cases, dashboard totals and coordinator decisions.",coordinator.requests_page; frontend.request_page,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q059,"member profile: SELECT users, roles, member_profiles",app/member.py:56 (member_profile),"
+        SELECT u.user_id,u.email,p.first_name,p.last_name,p.phone,p.address,p.city
+        FROM users u JOIN roles r ON r.role_id=u.role_id
+        JOIN member_profiles p ON p.user_id=u.user_id
+        WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member'
+    ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.member_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q060,"load member: SELECT users, roles",app/member.py:112 (load_member),"
+                    SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
+                    WHERE u.firebase_uid=:uid AND u.is_active=TRUE AND r.role_name='member'
+                ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.load_member,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q061,"member requests: SELECT referrals, organizations, service_requests, services, priority_levels",app/member.py:213 (member_requests),"
+            SELECT sr.request_id,sr.status,sr.created_at,s.name AS service_name,
+                   p.level_name AS priority,p.deadline_hours AS priority_hours,
+                   (SELECT r.response_deadline FROM referrals r WHERE r.request_id=sr.request_id
+                    ORDER BY r.attempt_number DESC LIMIT 1) AS response_deadline,
+                   (SELECT o.name FROM referrals r JOIN organizations o ON o.organization_id=r.organization_id
+                    WHERE r.request_id=sr.request_id ORDER BY r.attempt_number DESC LIMIT 1) AS org_name
+            FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+            JOIN priority_levels p ON p.priority_id=sr.priority_id
+            WHERE sr.member_id=:owner ORDER BY sr.created_at DESC,sr.request_id DESC
+        ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.member_requests,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q062,"details: SELECT service_requests, services",app/member.py:244 (details),"
+            SELECT sr.created_at,sr.description,s.delivery_mode FROM service_requests sr
+            JOIN services s ON s.service_id=sr.service_id WHERE sr.request_id=:id
+        ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.details,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q063,"details: SELECT referral_status_history, referrals",app/member.py:248 (details),"
+            SELECT h.new_status AS text,h.changed_at AS time FROM referral_status_history h
+            JOIN referrals r ON r.referral_id=h.referral_id WHERE r.request_id=:id
+            ORDER BY h.changed_at,h.history_id
+        ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.details,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q064,"details: SELECT referrals, organizations",app/member.py:253 (details),"
+            SELECT o.name,o.contact_email AS email,o.contact_phone AS phone,r.status
+            FROM referrals r JOIN organizations o ON o.organization_id=r.organization_id
+            WHERE r.request_id=:id ORDER BY r.attempt_number DESC LIMIT 1
+        ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.details,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q065,saved feedback: SELECT feedback,app/member.py:291 (saved_feedback),"
+        SELECT feedback_id,is_helpful,comment FROM feedback WHERE request_id=:id AND member_id=:member
+    ",DQL,Application,"Read or update an authenticated member profile, owned requests and dashboard statistics.",member.saved_feedback,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q066,"representative: SELECT users, roles, organization_representatives, organizations",app/organization.py:29 (representative),"
+        SELECT u.user_id,rep.organization_id,o.name AS org_name,o.status AS raw_status
+        FROM users u JOIN roles role ON role.role_id=u.role_id
+        JOIN organization_representatives rep ON rep.user_id=u.user_id
+        JOIN organizations o ON o.organization_id=rep.organization_id
+        WHERE {'u.firebase_uid=:id' if uid is not None else 'u.user_id=:id'} AND u.is_active=TRUE AND role.role_name='representative'
+    ",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.representative,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q067,"rows: SELECT referrals, service_requests, services, priority_levels",app/organization.py:105 (rows),"
+        SELECT r.referral_id,r.request_id,r.status AS raw_status,r.response_deadline,
+               (r.response_deadline <= :now) AS is_overdue,
+               sr.status AS request_status,sr.created_at,sr.description AS details,
+               s.name AS service_name,s.delivery_mode,p.level_name AS priority,
+               p.deadline_hours AS priority_hours
+        FROM referrals r JOIN service_requests sr ON sr.request_id=r.request_id
+        JOIN services s ON s.service_id=sr.service_id
+        JOIN priority_levels p ON p.priority_id=sr.priority_id
+        WHERE r.organization_id=:org ORDER BY r.referral_id DESC
+    ",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.rows,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,One SQL template family; optional clauses are not additional queries. filters += ' AND sr.request_id=:request'
+Q068,dashboard: SELECT organization_services,app/organization.py:135 (dashboard),SELECT COUNT(DISTINCT service_id) FROM organization_services WHERE organization_id=:org,DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.dashboard,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q069,render services: SELECT service_categories,app/organization.py:221 (render_services),SELECT name FROM service_categories ORDER BY name,DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.render_services,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q070,"render services: SELECT services, service_categories",app/organization.py:222 (render_services),"SELECT s.service_id,s.name,s.description,s.delivery_mode,c.name AS category
+            FROM services s JOIN service_categories c ON c.category_id=s.category_id
+            WHERE s.is_active=TRUE AND c.is_active=TRUE ORDER BY s.name,s.service_id",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.render_services,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q071,render services: SELECT service_areas,app/organization.py:225 (render_services),"SELECT area_id,region_name,city FROM service_areas
+            WHERE is_active=TRUE ORDER BY city,region_name,area_id",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.render_services,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q072,details: SELECT referral_status_history,app/organization.py:332 (details),"SELECT new_status AS text,changed_at AS time
+            FROM referral_status_history WHERE referral_id=:id ORDER BY history_id",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.details,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q073,"details: SELECT service_requests, users, member_profiles",app/organization.py:337 (details),"
+                SELECT u.email AS contact_email,p.phone AS contact_phone,p.address AS contact_address,
+                       p.first_name,p.last_name FROM service_requests sr JOIN users u ON u.user_id=sr.member_id
+                JOIN member_profiles p ON p.user_id=u.user_id WHERE sr.request_id=:id
+            ",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.details,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q074,act: SELECT referrals,app/organization.py:367 (act),"SELECT referral_id FROM referrals WHERE referral_id=:referral
+                AND request_id=:request AND organization_id=:org",DQL,Application,"Read or update organization-owned services, referrals, approval status and dashboard totals.",organization.act,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q075,"save profile: SELECT users, roles",app/registration.py:79 (save_profile); app/services/cancellations.py:18 (cancel_request); app/services/feedback.py:27 (submit_feedback); app/services/guest_requests.py:90 (create_guest_request); app/services/manual_assignment.py:40 (assign_request); app/services/member_profiles.py:32 (update_profile); app/services/organization_approvals.py:50 (decide_application); app/services/organization_status.py:19 (change_organization_status),"
+                SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
+                WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member' FOR UPDATE
+            ",DQL,Application,Complete verified registration transactionally without role injection or duplicate accounts.,registration.save_profile; cancellations.cancel_request; feedback.submit_feedback; guest_requests.create_guest_request; manual_assignment.assign_request; member_profiles.update_profile; organization_approvals.decide_application; organization_status.change_organization_status,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q076,save profile: SELECT member_profiles,app/registration.py:85 (save_profile); app/services/member_profiles.py:37 (update_profile),"
+                SELECT first_name,last_name,phone,address,city FROM member_profiles WHERE user_id=:id
+            ",DQL,Application,Complete verified registration transactionally without role injection or duplicate accounts.,registration.save_profile; member_profiles.update_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q077,save profile: INSERT member_profiles,app/registration.py:92 (save_profile); app/services/guest_requests.py:130 (create_guest_request),"
+                INSERT INTO member_profiles(user_id,first_name,last_name,phone,address,city)
+                VALUES(:id,:first_name,:last_name,:phone,:address,:city)
+            ",DML,Application,Complete verified registration transactionally without role injection or duplicate accounts.,registration.save_profile; guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q078,submit guest request: SELECT,app/requests.py:46 (submit_guest_request); app/services/guest_requests.py:83 (create_guest_request),select(EventOutbox).where(EventOutbox.deduplication_key == key),DQL,Application,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.submit_guest_request; guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q079,record attendance: SELECT,app/services/attendance.py:17 (record_attendance); app/services/completions.py:24 (complete_referral); app/services/referrals.py:20 (accept_referral); app/services/referrals.py:78 (reject_referral),select(Referral.request_id).where(Referral.referral_id == referral_id),DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; completions.complete_referral; referrals.accept_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q080,record attendance: SELECT,app/services/attendance.py:21 (record_attendance); app/services/attendance.py:93 (handle_request_attended); app/services/cancellations.py:14 (cancel_request); app/services/completions.py:28 (complete_referral); app/services/feedback.py:23 (submit_feedback); app/services/feedback.py:76 (handle_feedback_submitted); app/services/manual_assignment.py:16 (assignment_choices); app/services/manual_assignment.py:34 (assign_request); app/services/referrals.py:24 (accept_referral); app/services/referrals.py:82 (reject_referral),select(ServiceRequest).where(ServiceRequest.request_id == request_id).with_for_update(),DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; attendance.handle_request_attended; cancellations.cancel_request; completions.complete_referral; feedback.submit_feedback; feedback.handle_feedback_submitted; manual_assignment.assignment_choices; manual_assignment.assign_request; referrals.accept_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q081,record attendance: SELECT,app/services/attendance.py:23 (record_attendance); app/services/completions.py:30 (complete_referral); app/services/referrals.py:26 (accept_referral); app/services/referrals.py:84 (reject_referral),select(Referral).where(Referral.referral_id == referral_id).with_for_update(),DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; completions.complete_referral; referrals.accept_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q082,"record attendance: SELECT organization_representatives, users, roles",app/services/attendance.py:27 (record_attendance),"
+            SELECT rep.representative_id, rep.organization_id
+            FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id
+            JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.user_id=:user AND u.is_active=TRUE
+              AND r.role_name='representative' FOR UPDATE
+        ",DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q083,record attendance: SELECT attendance_records,app/services/attendance.py:37 (record_attendance),"
+            SELECT attendance_id, referral_id, first_attended_at, is_on_time
+            FROM attendance_records WHERE request_id=:request FOR UPDATE
+        ",DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q084,record attendance: SELECT organization_services,app/services/attendance.py:48 (record_attendance); app/services/referrals.py:52 (accept_referral),"
+            SELECT current_active_referrals FROM organization_services
+            WHERE organization_id=:org AND service_id=:service AND service_area_id=:area
+            FOR UPDATE
+        ",DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; referrals.accept_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q085,record attendance: INSERT attendance_records,app/services/attendance.py:61 (record_attendance),"
+            INSERT INTO attendance_records
+              (request_id, referral_id, attended_by_representative_id, first_attended_at, is_on_time)
+            VALUES (:request, :referral, :rep, :now, :on_time)
+        ",DML,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q086,record attendance: SELECT attendance_records,app/services/attendance.py:67 (record_attendance),SELECT attendance_id FROM attendance_records WHERE request_id=:request,DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q087,record attendance: UPDATE referrals,app/services/attendance.py:70 (record_attendance); app/services/completions.py:88 (complete_referral),SQLAlchemy dirty-object flush/commit: referral.status = 'attended',DML,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; completions.complete_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,One ORM update family per entity/field set; branch values are not separate statements.
+Q088,record attendance: UPDATE service_requests,app/services/attendance.py:71 (record_attendance); app/services/cancellations.py:30 (cancel_request); app/services/completions.py:89 (complete_referral); app/services/referrals.py:132 (reject_referral),SQLAlchemy dirty-object flush/commit: request.status = 'in_progress',DML,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; cancellations.cancel_request; completions.complete_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,One ORM update family per entity/field set; branch values are not separate statements.
+Q089,record attendance: INSERT referral_status_history,app/services/attendance.py:72 (record_attendance); app/services/completions.py:90 (complete_referral); app/services/referrals.py:66 (accept_referral); app/services/referrals.py:127 (reject_referral),"session.add(ReferralStatusHistory(referral_id=referral_id, old_status='accepted', new_status='attended', changed_by_user_id=user_id, notes='Organization confirmed first attendance')); object definition: ReferralStatusHistory(referral_id=referral_id, old_status='accepted', new_status='attended', changed_by_user_id=user_id, notes='Organization confirmed first attendance')",DML,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.record_attendance; completions.complete_referral; referrals.accept_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q090,"handle request attended: SELECT attendance_records, referrals",app/services/attendance.py:97 (handle_request_attended),"
+            SELECT a.first_attended_at, a.is_on_time, r.status
+            FROM attendance_records a JOIN referrals r ON r.referral_id=a.referral_id
+            WHERE a.request_id=:request AND r.request_id=:request
+              AND a.attendance_id=:attendance AND a.referral_id=:referral
+        ",DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.handle_request_attended,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q091,"handle request attended: SELECT attendance_records, service_requests",app/services/attendance.py:107 (handle_request_attended),"
+            SELECT a.first_attended_at <= s.attendance_deadline
+            FROM attendance_records a JOIN service_requests s ON s.request_id=a.request_id
+            WHERE a.attendance_id=:id
+        ",DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.handle_request_attended,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q092,"handle request attended: SELECT users, roles",app/services/attendance.py:116 (handle_request_attended); app/services/feedback.py:105 (handle_feedback_submitted); app/services/notifications.py:21 (alert_coordinators),"
+            SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
+            WHERE u.is_active=TRUE AND r.role_name='coordinator'
+        ",DQL,Application,Record first attendance once and verify attendance-target results and recipients.,attendance.handle_request_attended; feedback.handle_feedback_submitted; notifications.alert_coordinators,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q093,cancel request: SELECT,app/services/cancellations.py:17 (cancel_request); app/services/manual_assignment.py:19 (assignment_choices); app/services/manual_assignment.py:38 (assign_request),select(Referral).where(Referral.request_id == request_id).order_by(Referral.attempt_number).with_for_update(),DQL,Application,Cancel only an owned waiting request with no active referral or recorded attendance.,cancellations.cancel_request; manual_assignment.assignment_choices; manual_assignment.assign_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q094,"cancel request: SELECT attendance_records, referrals",app/services/cancellations.py:26 (cancel_request),"SELECT a.attendance_id FROM attendance_records a
+            JOIN referrals r ON r.referral_id=a.referral_id WHERE r.request_id=:id LIMIT 1",DQL,Application,Cancel only an owned waiting request with no active referral or recorded attendance.,cancellations.cancel_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q095,"complete referral: SELECT organization_representatives, users, roles",app/services/completions.py:34 (complete_referral); app/services/referrals.py:30 (accept_referral); app/services/referrals.py:90 (reject_referral),"
+            SELECT rep.organization_id FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.user_id=:user AND u.is_active=TRUE
+              AND r.role_name='representative' FOR UPDATE
+        ",DQL,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral; referrals.accept_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q096,complete referral: SELECT service_completions,app/services/completions.py:42 (complete_referral),"
+            SELECT completion_id,referral_id,outcome,summary_notes
+            FROM service_completions WHERE request_id=:id FOR UPDATE
+        ",DQL,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q097,complete referral: SELECT attendance_records,app/services/completions.py:55 (complete_referral),"
+            SELECT attendance_id,referral_id FROM attendance_records WHERE request_id=:id FOR UPDATE
+        ",DQL,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q098,complete referral: SELECT organization_services,app/services/completions.py:60 (complete_referral); app/services/referrals.py:109 (reject_referral),"
+            SELECT organization_service_id FROM organization_services
+            WHERE organization_id=:org AND service_id=:service AND service_area_id=:area
+            FOR UPDATE
+        ",DQL,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q099,complete referral: SELECT attendance_records,app/services/completions.py:69 (complete_referral),"
+            SELECT first_attended_at <= :now FROM attendance_records WHERE attendance_id=:id
+        ",DQL,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q100,complete referral: UPDATE organization_services,app/services/completions.py:74 (complete_referral); app/services/referrals.py:117 (reject_referral),"
+            UPDATE organization_services SET current_active_referrals=current_active_referrals-1
+            WHERE organization_service_id=:id AND current_active_referrals>0
+        ",DML,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral; referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q101,complete referral: INSERT service_completions,app/services/completions.py:80 (complete_referral),"
+            INSERT INTO service_completions(request_id,referral_id,completed_at,outcome,summary_notes)
+            VALUES(:request,:referral,:now,:outcome,:notes)
+        ",DML,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q102,complete referral: SELECT service_completions,app/services/completions.py:85 (complete_referral),SELECT completion_id FROM service_completions WHERE request_id=:id,DQL,Application,Complete an attended service once and release its reserved capacity transactionally.,completions.complete_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q103,"submit feedback: SELECT service_completions, referrals",app/services/feedback.py:35 (submit_feedback),"
+            SELECT r.organization_id FROM service_completions c
+            JOIN referrals r ON r.referral_id=c.referral_id
+            WHERE c.request_id=:id AND r.request_id=:id AND r.status='completed'
+            FOR UPDATE
+        ",DQL,Application,Save owned completed-request feedback once and deliver partner/coordinator follow-up notifications.,feedback.submit_feedback,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q104,submit feedback: SELECT feedback,app/services/feedback.py:43 (submit_feedback),"
+            SELECT feedback_id,member_id,organization_id,is_helpful,comment
+            FROM feedback WHERE request_id=:id FOR UPDATE
+        ",DQL,Application,Save owned completed-request feedback once and deliver partner/coordinator follow-up notifications.,feedback.submit_feedback,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q105,submit feedback: INSERT feedback,app/services/feedback.py:54 (submit_feedback),"
+            INSERT INTO feedback(request_id,member_id,organization_id,is_helpful,comment)
+            VALUES(:request,:member,:org,:helpful,:comment)
+        ",DML,Application,Save owned completed-request feedback once and deliver partner/coordinator follow-up notifications.,feedback.submit_feedback,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q106,submit feedback: SELECT feedback,app/services/feedback.py:59 (submit_feedback),SELECT feedback_id FROM feedback WHERE request_id=:id,DQL,Application,Save owned completed-request feedback once and deliver partner/coordinator follow-up notifications.,feedback.submit_feedback,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q107,"handle feedback submitted: SELECT feedback, service_completions, referrals",app/services/feedback.py:80 (handle_feedback_submitted),"
+            SELECT f.organization_id,f.is_helpful FROM feedback f
+            JOIN service_completions c ON c.request_id=f.request_id
+            JOIN referrals r ON r.referral_id=c.referral_id AND r.request_id=f.request_id
+            WHERE f.feedback_id=:feedback AND f.request_id=:request AND f.member_id=:member
+              AND f.organization_id=r.organization_id AND r.status='completed'
+        ",DQL,Application,Save owned completed-request feedback once and deliver partner/coordinator follow-up notifications.,feedback.handle_feedback_submitted,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q108,"handle feedback submitted: SELECT organization_representatives, users, roles",app/services/feedback.py:90 (handle_feedback_submitted); app/services/notifications.py:47 (handle_referral_created),"
+            SELECT u.user_id,rep.is_primary_contact FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.organization_id=:org AND u.is_active=TRUE AND r.role_name='representative'
+            ORDER BY u.user_id
+        ",DQL,Application,Save owned completed-request feedback once and deliver partner/coordinator follow-up notifications.,feedback.handle_feedback_submitted; notifications.handle_referral_created,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q109,"service choices: SELECT services, service_categories",app/services/guest_requests.py:24 (service_choices),"
+        SELECT s.service_id,s.name AS service_name,c.name AS category,s.delivery_mode
+        FROM services s JOIN service_categories c ON c.category_id=s.category_id
+        WHERE s.is_active=TRUE AND c.is_active=TRUE ORDER BY s.service_id
+    ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.service_choices,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q110," areas: SELECT organization_services, organizations, service_areas",app/services/guest_requests.py:42 (_areas),"
+        SELECT DISTINCT a.area_id,a.region_name,a.city
+        FROM organization_services os JOIN organizations o ON o.organization_id=os.organization_id
+        JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE os.service_id=:service AND os.status='active'
+          AND o.status='approved' AND a.is_active=TRUE ORDER BY a.area_id
+    ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests._areas,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q111,"create guest request: SELECT services, service_categories",app/services/guest_requests.py:98 (create_guest_request),"
+            SELECT s.name,s.delivery_mode FROM services s
+            JOIN service_categories c ON c.category_id=s.category_id
+            WHERE s.service_id=:id AND s.is_active=TRUE AND c.is_active=TRUE FOR UPDATE
+        ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q112,create guest request: SELECT priority_levels,app/services/guest_requests.py:112 (create_guest_request),"
+            SELECT priority_id,level_name,deadline_hours FROM priority_levels WHERE level_name=:name
+        ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q113,create guest request: INSERT users,app/services/guest_requests.py:124 (create_guest_request),"
+                INSERT INTO users(role_id,email,password_hash,is_active)
+                VALUES(:role,:email,:password,TRUE)
+            ",DML,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q114,"create guest request: SELECT users, roles, member_profiles",app/services/guest_requests.py:137 (create_guest_request),"
+                SELECT u.email,p.first_name,p.last_name,p.phone,p.address,p.city
+                FROM users u JOIN roles r ON r.role_id=u.role_id
+                JOIN member_profiles p ON p.user_id=u.user_id
+                WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member' FOR UPDATE
+            ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q115,create guest request: INSERT service_requests,app/services/guest_requests.py:152 (create_guest_request),"session.add(request); object definition: ServiceRequest(member_id=owner_id, service_id=service_id, service_area_id=areas[0].area_id, priority_id=priority.priority_id, title=fields['details'].splitlines()[0][:150], description=fields['details'], status='submitted', attendance_deadline=deadline)",DML,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.create_guest_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q116,"owned request: SELECT service_requests, services, users, roles, priority_levels, member_profiles",app/services/guest_requests.py:164 (owned_request),"
+        SELECT sr.request_id,sr.status,sr.priority_id,sr.attendance_deadline,
+               s.name AS service_name,p.level_name AS priority,p.deadline_hours AS priority_hours,
+               mp.first_name,mp.last_name
+        FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+        JOIN users u ON u.user_id=sr.member_id JOIN roles role ON role.role_id=u.role_id
+        JOIN priority_levels p ON p.priority_id=sr.priority_id
+        JOIN member_profiles mp ON mp.user_id=sr.member_id
+        WHERE sr.request_id=:id AND sr.member_id=:owner
+          AND u.is_active=TRUE AND role.role_name='member'
+    ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.owned_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q117,owned request: SELECT referrals,app/services/guest_requests.py:177 (owned_request),"
+        SELECT response_deadline FROM referrals WHERE request_id=:id ORDER BY attempt_number DESC LIMIT 1
+    ",DQL,Application,Validate catalog/area/time-frame choices and atomically create an owned request and outbox event.,guest_requests.owned_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q118,assignment choices: SELECT organizations,app/services/manual_assignment.py:24 (assignment_choices),"SELECT organization_id,name FROM organizations",DQL,Application,Assign only an eligible partner to an unmatched request without replacing active work or resetting SLA.,manual_assignment.assignment_choices,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q119,assign request: SELECT,app/services/manual_assignment.py:50 (assign_request),"select(ReferralStatusHistory.history_id).where(ReferralStatusHistory.referral_id == latest.referral_id, ReferralStatusHistory.changed_by_user_id == actor, ReferralStatusHistory.new_status == 'sent', ReferralStatusHistory.notes == 'Coordinator manual assignment')",DQL,Application,Assign only an eligible partner to an unmatched request without replacing active work or resetting SLA.,manual_assignment.assign_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q120,assign request: SELECT,app/services/manual_assignment.py:76 (assign_request),select(Referral.referral_id).where(Referral.request_id == request_id).order_by(Referral.attempt_number.desc()).limit(1),DQL,Application,Assign only an eligible partner to an unmatched request without replacing active work or resetting SLA.,manual_assignment.assign_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q121,update profile: UPDATE member_profiles,app/services/member_profiles.py:43 (update_profile),"UPDATE member_profiles SET first_name=:first_name,last_name=:last_name,
+            phone=:phone,address=:address,city=:city WHERE user_id=:id",DML,Application,Validate and update the authenticated member contact profile.,member_profiles.update_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q122,notify: INSERT notifications,app/services/notifications.py:15 (notify),"insert(Notification).values(user_id=user_id, related_request_id=request_id, deduplication_key=key, title=title, message=message, type=kind).on_duplicate_key_update(notification_id=Notification.notification_id)",DML,Application,Deliver in-app alerts to the correct active recipients using stable deduplication keys.,notifications.notify,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q123,handle referral created: SELECT service_requests,app/services/notifications.py:36 (handle_referral_created),SELECT request_id FROM service_requests WHERE request_id = :id FOR UPDATE,DQL,Application,Deliver in-app alerts to the correct active recipients using stable deduplication keys.,notifications.handle_referral_created,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q124,handle referral created: SELECT referrals,app/services/notifications.py:41 (handle_referral_created),"
+            SELECT organization_id FROM referrals
+            WHERE referral_id = :referral AND request_id = :request
+        ",DQL,Application,Deliver in-app alerts to the correct active recipients using stable deduplication keys.,notifications.handle_referral_created,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q125,"add offering: SELECT organization_representatives, users, roles",app/services/offerings.py:22 (add_offering); app/services/offerings.py:100 (update_offering),"SELECT rep.organization_id
+            FROM organization_representatives rep JOIN users u ON u.user_id=rep.user_id
+            JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=:id
+            AND u.is_active=TRUE AND r.role_name='representative' FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering; offerings.update_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q126,add offering: SELECT organizations,app/services/offerings.py:29 (add_offering); app/services/offerings.py:107 (update_offering); app/services/organization_approvals.py:43 (decide_application); app/services/organization_status.py:15 (change_organization_status),"SELECT status FROM organizations
+            WHERE organization_id=:org FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering; offerings.update_offering; organization_approvals.decide_application; organization_status.change_organization_status,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q127,"add offering: SELECT services, service_categories",app/services/offerings.py:33 (add_offering),"SELECT s.service_id FROM services s
+            JOIN service_categories c ON c.category_id=s.category_id
+            WHERE s.service_id=:id AND s.is_active=TRUE AND c.is_active=TRUE FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q128,add offering: SELECT service_areas,app/services/offerings.py:37 (add_offering),"SELECT area_id FROM service_areas
+            WHERE area_id=:id AND is_active=TRUE FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q129,add offering: SELECT priority_levels,app/services/offerings.py:39 (add_offering),"SELECT priority_id,level_name FROM priority_levels
+            ORDER BY priority_id FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q130,add offering: SELECT organization_services,app/services/offerings.py:46 (add_offering),"SELECT organization_service_id,status,active_referral_limit
+            FROM organization_services WHERE organization_id=:org AND service_id=:service
+            AND service_area_id=:area FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q131,add offering: SELECT service_priority_support,app/services/offerings.py:51 (add_offering),"SELECT priority_id FROM service_priority_support
+                WHERE organization_service_id=:id AND is_supported=TRUE FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q132,add offering: INSERT organization_services,app/services/offerings.py:58 (add_offering),"INSERT INTO organization_services
+            (organization_id,service_id,service_area_id,status,active_referral_limit,current_active_referrals)
+            VALUES(:org,:service,:area,:status,:limit,0)",DML,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q133,add offering: INSERT service_priority_support,app/services/offerings.py:63 (add_offering),"INSERT INTO service_priority_support
+                (organization_service_id,priority_id,is_supported) VALUES(:id,:priority,TRUE)",DML,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.add_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q134,"organization offerings: SELECT organization_availability, organization_services, services, service_categories, service_areas",app/services/offerings.py:70 (organization_offerings),"
+        SELECT os.organization_service_id,os.service_id,os.status AS raw_status,
+               os.active_referral_limit AS max_referrals,os.current_active_referrals,
+               s.name AS service_name,s.description,s.delivery_mode,c.name AS category,
+               a.region_name,a.city,
+               COALESCE((SELECT MAX(av.availability_id) FROM organization_availability av
+                   WHERE av.organization_service_id=os.organization_service_id),0) AS availability_version
+        FROM organization_services os JOIN services s ON s.service_id=os.service_id
+        JOIN service_categories c ON c.category_id=s.category_id
+        JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE os.organization_id=:org ORDER BY os.organization_service_id
+    ",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.organization_offerings,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q135,update offering: SELECT organization_services,app/services/offerings.py:111 (update_offering),"
+            SELECT status,active_referral_limit,current_active_referrals FROM organization_services
+            WHERE organization_service_id=:id AND organization_id=:org FOR UPDATE
+        ",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.update_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q136,update offering: SELECT organization_availability,app/services/offerings.py:123 (update_offering),"SELECT availability_id FROM organization_availability
+            WHERE organization_service_id=:id ORDER BY availability_id DESC LIMIT 1 FOR UPDATE",DQL,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.update_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q137,update offering: UPDATE organization_services,app/services/offerings.py:131 (update_offering),"
+            UPDATE organization_services SET status=:status,active_referral_limit=:limit
+            WHERE organization_service_id=:id AND organization_id=:org
+              AND current_active_referrals<=:limit
+        ",DML,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.update_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q138,update offering: INSERT organization_availability,app/services/offerings.py:139 (update_offering),"
+                INSERT INTO organization_availability(organization_service_id,action,recorded_at,recorded_by_user_id)
+                VALUES(:id,:action,:now,:actor)
+            ",DML,Application,"Validate and manage approved-organization offerings, coverage, availability and referral capacity.",offerings.update_offering,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q139,"pending applications: SELECT organization_applications, organizations, organization_representatives, member_profiles",app/services/organization_approvals.py:15 (pending_applications),"
+        SELECT a.application_id,o.organization_id AS org_id,o.name AS org_name,
+               o.contact_email AS email,o.contact_phone AS phone,o.city AS service_area,
+               a.created_at,rep.full_name AS representative_name,mp.first_name,mp.last_name
+        FROM organization_applications a JOIN organizations o ON o.organization_id=a.organization_id
+        LEFT JOIN organization_representatives rep ON rep.user_id=a.submitted_by_user_id
+          AND rep.organization_id=o.organization_id
+        LEFT JOIN member_profiles mp ON mp.user_id=a.submitted_by_user_id
+        WHERE o.status='pending' AND a.status IN ('submitted','under_review')
+          AND a.application_id=(SELECT latest.application_id FROM organization_applications latest
+              WHERE latest.organization_id=o.organization_id ORDER BY latest.application_id DESC LIMIT 1)
+        ORDER BY a.application_id
+    ",DQL,Application,Review the latest pending application and authorize idempotent coordinator decisions.,organization_approvals.pending_applications,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q140,decide application: SELECT organization_applications,app/services/organization_approvals.py:45 (decide_application),"SELECT application_id,status,submitted_by_user_id,decision_notes
+            FROM organization_applications WHERE application_id=:app AND organization_id=:org FOR UPDATE",DQL,Application,Review the latest pending application and authorize idempotent coordinator decisions.,organization_approvals.decide_application,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q141,decide application: SELECT organization_applications,app/services/organization_approvals.py:55 (decide_application),"SELECT application_id FROM organization_applications
+            WHERE organization_id=:org ORDER BY application_id DESC LIMIT 1 FOR UPDATE",DQL,Application,Review the latest pending application and authorize idempotent coordinator decisions.,organization_approvals.decide_application,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q142,decide application: SELECT users,app/services/organization_approvals.py:68 (decide_application),SELECT user_id FROM users WHERE user_id=:id,DQL,Application,Review the latest pending application and authorize idempotent coordinator decisions.,organization_approvals.decide_application,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q143,decide application: UPDATE organization_applications,app/services/organization_approvals.py:71 (decide_application),"UPDATE organization_applications
+            SET status=:status,reviewed_by_user_id=:reviewer,decision_notes=:notes,decided_at=:now
+            WHERE application_id=:app",DML,Application,Review the latest pending application and authorize idempotent coordinator decisions.,organization_approvals.decide_application,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q144,decide application: UPDATE organizations,app/services/organization_approvals.py:76 (decide_application); app/services/organization_status.py:29 (change_organization_status),UPDATE organizations SET status='approved' WHERE organization_id=:org,DML,Application,Review the latest pending application and authorize idempotent coordinator decisions.,organization_approvals.decide_application; organization_status.change_organization_status,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q145,"organization profile: SELECT organization_representatives, users, roles, organizations",app/services/organization_profiles.py:14 (organization_profile),"SELECT o.organization_id,o.name AS org_name,o.status,
+        o.contact_email AS email,o.contact_phone AS phone,o.address,o.city,
+        rep.full_name AS contact_name
+        FROM organization_representatives rep JOIN users u ON u.user_id=rep.user_id
+        JOIN roles r ON r.role_id=u.role_id JOIN organizations o ON o.organization_id=rep.organization_id
+        WHERE rep.user_id=:user AND rep.organization_id=:org
+        AND u.is_active=TRUE AND r.role_name='representative'
+    ",DQL,Application,Read or update the representative-owned organization contact profile.,organization_profiles.organization_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q146,"organization profile: SELECT organization_services, service_areas",app/services/organization_profiles.py:24 (organization_profile),"SELECT DISTINCT a.region_name,a.city
+        FROM organization_services os JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE os.organization_id=:org ORDER BY a.city,a.region_name",DQL,Application,Read or update the representative-owned organization contact profile.,organization_profiles.organization_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q147,"update organization profile: SELECT organization_representatives, users, roles",app/services/organization_profiles.py:47 (update_organization_profile),"SELECT rep.full_name,rep.phone FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.user_id=:user AND rep.organization_id=:org
+            AND u.is_active=TRUE AND r.role_name='representative' FOR UPDATE",DQL,Application,Read or update the representative-owned organization contact profile.,organization_profiles.update_organization_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q148,update organization profile: SELECT organizations,app/services/organization_profiles.py:54 (update_organization_profile),"SELECT contact_phone,address,city FROM organizations
+            WHERE organization_id=:org FOR UPDATE",DQL,Application,Read or update the representative-owned organization contact profile.,organization_profiles.update_organization_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q149,update organization profile: UPDATE organizations,app/services/organization_profiles.py:62 (update_organization_profile),"UPDATE organizations SET contact_phone=:phone,address=:address,city=:city
+                WHERE organization_id=:org",DML,Application,Read or update the representative-owned organization contact profile.,organization_profiles.update_organization_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q150,update organization profile: UPDATE organization_representatives,app/services/organization_profiles.py:65 (update_organization_profile),"UPDATE organization_representatives SET full_name=:contact_name,phone=:phone
+                WHERE user_id=:user AND organization_id=:org",DML,Application,Read or update the representative-owned organization contact profile.,organization_profiles.update_organization_profile,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q151,"register organization: SELECT organization_representatives, organizations, organization_applications",app/services/organization_registration.py:39 (register_organization),"SELECT o.organization_id,o.name AS org_name,
+                o.address,o.city,o.contact_phone AS phone,o.contact_email,
+                rep.full_name AS contact_name,rep.phone AS representative_phone,
+                a.application_id,a.submission_notes
+                FROM organization_representatives rep
+                JOIN organizations o ON o.organization_id=rep.organization_id
+                JOIN organization_applications a ON a.organization_id=o.organization_id
+                    AND a.submitted_by_user_id=rep.user_id
+                WHERE rep.user_id=:id ORDER BY a.application_id LIMIT 1",DQL,Application,Create or recover one verified pending organization application without promoting existing accounts.,organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q152,register organization: SELECT organizations,app/services/organization_registration.py:59 (register_organization),SELECT organization_id FROM organizations WHERE name=:name,DQL,Application,Create or recover one verified pending organization application without promoting existing accounts.,organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q153,register organization: INSERT organizations,app/services/organization_registration.py:68 (register_organization),"INSERT INTO organizations
+            (name,contact_email,contact_phone,address,city,status)
+            VALUES(:org_name,:email,:phone,:address,:city,'pending')",DML,Application,Create or recover one verified pending organization application without promoting existing accounts.,organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q154,register organization: INSERT organization_representatives,app/services/organization_registration.py:71 (register_organization),"INSERT INTO organization_representatives
+            (user_id,organization_id,full_name,phone,is_primary_contact)
+            VALUES(:user,:org,:contact_name,:phone,TRUE)",DML,Application,Create or recover one verified pending organization application without promoting existing accounts.,organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q155,register organization: INSERT organization_applications,app/services/organization_registration.py:74 (register_organization),"INSERT INTO organization_applications
+            (organization_id,submitted_by_user_id,status,submission_notes)
+            VALUES(:org,:user,'submitted',:notes)",DML,Application,Create or recover one verified pending organization application without promoting existing accounts.,organization_registration.register_organization,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q156,"password identity: SELECT users, roles",app/services/password_sessions.py:8 (password_identity),"SELECT u.firebase_uid AS uid,u.email FROM users u
+        JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=:id
+        AND u.is_active=TRUE AND r.role_name=:role",DQL,Application,Read the authenticated account identity for recent-authentication password changes.,password_sessions.password_identity,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q157,accept referral: UPDATE referrals,app/services/referrals.py:64 (accept_referral),SQLAlchemy dirty-object flush/commit: referral.status = 'accepted'; referral.responded_at = now,DML,Application,Authorize and record an owned referral response while preserving capacity and backup events.,referrals.accept_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,One ORM update family per entity/field set; branch values are not separate statements.
+Q158,reject referral: UPDATE referrals,app/services/referrals.py:124 (reject_referral),SQLAlchemy dirty-object flush/commit: referral.status = 'rejected'; referral.responded_at = now; referral.rejection_reason = reason,DML,Application,Authorize and record an owned referral response while preserving capacity and backup events.,referrals.reject_referral,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,One ORM update family per entity/field set; branch values are not separate statements.
+Q159,report data: SELECT service_requests,app/services/reports.py:7 (report_data),"SELECT status,COUNT(*) AS count FROM service_requests GROUP BY status ORDER BY status",DQL,Application,"Calculate complete-dataset request/category, approved-partner and helpful-feedback aggregates.",reports.report_data,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q160,report data: SELECT feedback,app/services/reports.py:8 (report_data),"SELECT COUNT(*) AS count,
+        COALESCE(SUM(CASE WHEN is_helpful=TRUE THEN 1 ELSE 0 END),0) AS helpful
+        FROM feedback WHERE is_helpful IS NOT NULL",DQL,Application,"Calculate complete-dataset request/category, approved-partner and helpful-feedback aggregates.",reports.report_data,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q161,report data: SELECT organizations,app/services/reports.py:13 (report_data),SELECT COUNT(*) FROM organizations WHERE status='approved',DQL,Application,"Calculate complete-dataset request/category, approved-partner and helpful-feedback aggregates.",reports.report_data,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q162,"report data: SELECT service_requests, services, service_categories",app/services/reports.py:14 (report_data),"SELECT COALESCE(c.name,'Uncategorized') AS name,COUNT(*) AS count,
+        SUM(CASE WHEN sr.status='completed' THEN 1 ELSE 0 END) AS completed
+        FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+        LEFT JOIN service_categories c ON c.category_id=s.category_id
+        GROUP BY c.category_id,c.name ORDER BY name",DQL,Application,"Calculate complete-dataset request/category, approved-partner and helpful-feedback aggregates.",reports.report_data,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q163,"public services: SELECT organization_services, organizations, services, service_areas",app/services/service_browsing.py:11 (public_services),"
+        SELECT os.service_id,o.name AS org_name,s.description,
+               os.current_active_referrals,os.active_referral_limit
+        FROM organization_services os
+        JOIN organizations o ON o.organization_id=os.organization_id
+        JOIN services s ON s.service_id=os.service_id
+        JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE o.status='approved' AND os.status='active' AND a.is_active=TRUE
+          AND s.is_active=TRUE
+        ORDER BY os.service_id,o.name,o.organization_id
+    ",DQL,Application,Find eligible public services with complete-dataset filters and current-page provider summaries.,service_browsing.public_services,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q164,create request: SELECT users,app/requests.py:137 (create_request),"db.session.get(User, member_id)",DQL,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.create_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q165,create request: SELECT services,app/requests.py:138 (create_request),"db.session.get(Service, data['service_id'])",DQL,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.create_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q166,create request: SELECT service_areas,app/requests.py:139 (create_request),"db.session.get(ServiceArea, data['service_area_id'])",DQL,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.create_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q167,create request: SELECT priority_levels,app/requests.py:140 (create_request),"db.session.get(PriorityLevel, data['priority_id'])",DQL,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.create_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q168,create request: INSERT service_requests,app/requests.py:171 (create_request),"db.session.add(new_request); object definition: ServiceRequest(member_id=member_id, service_id=service.service_id, service_area_id=area.area_id, priority_id=priority.priority_id, title=title.strip(), description=description.strip(), status='submitted', attendance_deadline=deadline.replace(tzinfo=None))",DML,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.create_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q169,get requests: SELECT,app/requests.py:209 (get_requests),db.session.query(ServiceRequest).filter_by(member_id=member_id).order_by(ServiceRequest.request_id.desc()).all(),DQL,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.get_requests,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q170,get request: SELECT service_requests,app/requests.py:238 (get_request),"db.session.get(ServiceRequest, request_id)",DQL,Legacy demonstration,"Support schema validation, synthetic data preparation or maintenance; not counted as active application behavior.",requests.get_request,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,False,
+Q171,CREATE roles,database/schema.sql:28 (); database/schema_safe.sql:14 (),"CREATE TABLE roles (
+    role_id INT AUTO_INCREMENT PRIMARY KEY,
+    role_name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q172,"CREATE users, CURRENT_TIMESTAMP, CASCADE",database/schema.sql:37 (); database/schema_safe.sql:23 (),"CREATE TABLE users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    role_id INT NOT NULL,
+    email VARCHAR(120) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_users_role
+        FOREIGN KEY (role_id) REFERENCES roles (role_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_users_role (role_id),
+    INDEX idx_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q173,"CREATE member_profiles, CURRENT_TIMESTAMP, CASCADE",database/schema.sql:54 (); database/schema_safe.sql:40 (),"CREATE TABLE member_profiles (
+    profile_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    phone VARCHAR(25) NOT NULL,
+    address VARCHAR(255) NULL,
+    city VARCHAR(100) NOT NULL DEFAULT 'Calgary',
+    preferred_contact_method ENUM('email', 'phone', 'sms') NOT NULL DEFAULT 'email',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_member_profiles_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_member_city (city)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q174,"CREATE organizations, CURRENT_TIMESTAMP",database/schema.sql:77 (); database/schema_safe.sql:63 (),"CREATE TABLE organizations (
+    organization_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL UNIQUE,
+    contact_email VARCHAR(120) NOT NULL,
+    contact_phone VARCHAR(25) NOT NULL,
+    address VARCHAR(255) NULL,
+    city VARCHAR(100) NOT NULL DEFAULT 'Calgary',
+    status ENUM('pending', 'approved', 'suspended') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_organizations_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q175,"CREATE organization_representatives, CASCADE",database/schema.sql:92 (); database/schema_safe.sql:78 (),"CREATE TABLE organization_representatives (
+    representative_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    organization_id INT NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    job_title VARCHAR(100) NULL,
+    phone VARCHAR(25) NULL,
+    is_primary_contact BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_org_reps_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_org_reps_org
+        FOREIGN KEY (organization_id) REFERENCES organizations (organization_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_org_reps_org (organization_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q176,"CREATE organization_applications, CASCADE",database/schema.sql:112 (); database/schema_safe.sql:98 (),"CREATE TABLE organization_applications (
+    application_id INT AUTO_INCREMENT PRIMARY KEY,
+    organization_id INT NOT NULL,
+    submitted_by_user_id INT NOT NULL,
+    reviewed_by_user_id INT NULL,
+    status ENUM('submitted', 'under_review', 'approved', 'rejected') NOT NULL DEFAULT 'submitted',
+    submission_notes TEXT NULL,
+    decision_notes TEXT NULL,
+    decided_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_org_apps_org
+        FOREIGN KEY (organization_id) REFERENCES organizations (organization_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_org_apps_submitted_by
+        FOREIGN KEY (submitted_by_user_id) REFERENCES users (user_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_org_apps_reviewed_by
+        FOREIGN KEY (reviewed_by_user_id) REFERENCES users (user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_org_apps_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q177,CREATE service_categories,database/schema.sql:136 (); database/schema_safe.sql:122 (),"CREATE TABLE service_categories (
+    category_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q178,"CREATE services, CASCADE",database/schema.sql:146 (); database/schema_safe.sql:132 (),"CREATE TABLE services (
+    service_id INT AUTO_INCREMENT PRIMARY KEY,
+    category_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    description TEXT NULL,
+    delivery_mode ENUM('in-person', 'online', 'phone') NOT NULL DEFAULT 'in-person',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_services_category
+        FOREIGN KEY (category_id) REFERENCES service_categories (category_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_services_category (category_id),
+    INDEX idx_services_delivery_mode (delivery_mode)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q179,CREATE service_areas,database/schema.sql:163 (); database/schema_safe.sql:149 (),"CREATE TABLE service_areas (
+    area_id INT AUTO_INCREMENT PRIMARY KEY,
+    city VARCHAR(100) NOT NULL DEFAULT 'Calgary',
+    region_name VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_area_city_region (city, region_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q180,"CREATE organization_services, CURRENT_TIMESTAMP, CASCADE",database/schema.sql:174 (); database/schema_safe.sql:160 (),"CREATE TABLE organization_services (
+    organization_service_id INT AUTO_INCREMENT PRIMARY KEY,
+    organization_id INT NOT NULL,
+    service_id INT NOT NULL,
+    service_area_id INT NOT NULL,
+    status ENUM('active', 'paused') NOT NULL DEFAULT 'active',
+    active_referral_limit INT NOT NULL DEFAULT 10,
+    current_active_referrals INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_org_svc_area (organization_id, service_id, service_area_id),
+    CONSTRAINT fk_org_svc_org
+        FOREIGN KEY (organization_id) REFERENCES organizations (organization_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_org_svc_svc
+        FOREIGN KEY (service_id) REFERENCES services (service_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_org_svc_area
+        FOREIGN KEY (service_area_id) REFERENCES service_areas (area_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_org_svc_status (status),
+    INDEX idx_org_svc_counts (current_active_referrals, active_referral_limit)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q181,CREATE priority_levels,database/schema.sql:200 (); database/schema_safe.sql:186 (),"CREATE TABLE priority_levels (
+    priority_id INT AUTO_INCREMENT PRIMARY KEY,
+    level_name ENUM('High', 'Medium', 'Low') NOT NULL UNIQUE,
+    deadline_hours INT NOT NULL,
+    description VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q182,"CREATE service_priority_support, CASCADE",database/schema.sql:210 (); database/schema_safe.sql:196 (),"CREATE TABLE service_priority_support (
+    support_id INT AUTO_INCREMENT PRIMARY KEY,
+    organization_service_id INT NOT NULL,
+    priority_id INT NOT NULL,
+    is_supported BOOLEAN NOT NULL DEFAULT TRUE,
+    UNIQUE KEY uq_orgsvc_priority (organization_service_id, priority_id),
+    CONSTRAINT fk_sps_org_service
+        FOREIGN KEY (organization_service_id) REFERENCES organization_services (organization_service_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_sps_priority
+        FOREIGN KEY (priority_id) REFERENCES priority_levels (priority_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q183,"CREATE organization_availability, CASCADE",database/schema.sql:226 (); database/schema_safe.sql:212 (),"CREATE TABLE organization_availability (
+    availability_id INT AUTO_INCREMENT PRIMARY KEY,
+    organization_service_id INT NOT NULL,
+    action ENUM('pause', 'resume') NOT NULL,
+    reason VARCHAR(255) NULL,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    recorded_by_user_id INT NOT NULL,
+    CONSTRAINT fk_org_avail_service
+        FOREIGN KEY (organization_service_id) REFERENCES organization_services (organization_service_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_org_avail_user
+        FOREIGN KEY (recorded_by_user_id) REFERENCES users (user_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_org_avail_action (action, recorded_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q184,"CREATE service_requests, CURRENT_TIMESTAMP, CASCADE",database/schema.sql:248 (); database/schema_safe.sql:234 (),"CREATE TABLE service_requests (
+    request_id INT AUTO_INCREMENT PRIMARY KEY,
+    member_id INT NOT NULL,
+    service_id INT NOT NULL,
+    service_area_id INT NOT NULL,
+    priority_id INT NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    description TEXT NOT NULL,
+    status ENUM('submitted', 'matched', 'in_progress', 'completed', 'unmatched', 'cancelled') NOT NULL DEFAULT 'submitted',
+    attendance_deadline DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_req_member
+        FOREIGN KEY (member_id) REFERENCES users (user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_req_service
+        FOREIGN KEY (service_id) REFERENCES services (service_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_req_area
+        FOREIGN KEY (service_area_id) REFERENCES service_areas (area_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_req_priority
+        FOREIGN KEY (priority_id) REFERENCES priority_levels (priority_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_req_status (status),
+    INDEX idx_req_deadline (attendance_deadline)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q185,"CREATE referrals, CURRENT_TIMESTAMP, CASCADE",database/schema.sql:278 (); database/schema_safe.sql:264 (),"CREATE TABLE referrals (
+    referral_id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL,
+    organization_id INT NOT NULL,
+    attempt_number INT NOT NULL DEFAULT 1,
+    is_backup BOOLEAN NOT NULL DEFAULT FALSE,
+    status ENUM('sent', 'accepted', 'rejected', 'timed_out', 'attended', 'completed') NOT NULL DEFAULT 'sent',
+    response_deadline DATETIME NOT NULL,
+    responded_at DATETIME NULL,
+    rejection_reason VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_request_attempt (request_id, attempt_number),
+    CONSTRAINT fk_ref_request
+        FOREIGN KEY (request_id) REFERENCES service_requests (request_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_ref_org
+        FOREIGN KEY (organization_id) REFERENCES organizations (organization_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_ref_status (status),
+    INDEX idx_ref_is_backup (is_backup),
+    INDEX idx_ref_response_deadline (response_deadline)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q186,"CREATE referral_status_history, CASCADE",database/schema.sql:304 (); database/schema_safe.sql:290 (),"CREATE TABLE referral_status_history (
+    history_id INT AUTO_INCREMENT PRIMARY KEY,
+    referral_id INT NOT NULL,
+    old_status VARCHAR(50) NULL,
+    new_status VARCHAR(50) NOT NULL,
+    changed_by_user_id INT NULL,
+    notes VARCHAR(255) NULL,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rsh_referral
+        FOREIGN KEY (referral_id) REFERENCES referrals (referral_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_rsh_user
+        FOREIGN KEY (changed_by_user_id) REFERENCES users (user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_rsh_referral (referral_id),
+    INDEX idx_rsh_new_status (new_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q187,"CREATE attendance_records, CASCADE",database/schema.sql:328 (); database/schema_safe.sql:314 (),"CREATE TABLE attendance_records (
+    attendance_id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL UNIQUE,
+    referral_id INT NOT NULL,
+    attended_by_representative_id INT NOT NULL,
+    first_attended_at DATETIME NOT NULL,
+    is_on_time BOOLEAN NOT NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_att_request
+        FOREIGN KEY (request_id) REFERENCES service_requests (request_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_att_referral
+        FOREIGN KEY (referral_id) REFERENCES referrals (referral_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_att_rep
+        FOREIGN KEY (attended_by_representative_id) REFERENCES organization_representatives (representative_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_att_is_on_time (is_on_time),
+    INDEX idx_att_first_attended (first_attended_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q188,"CREATE service_completions, CASCADE",database/schema.sql:352 (); database/schema_safe.sql:338 (),"CREATE TABLE service_completions (
+    completion_id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL UNIQUE,
+    referral_id INT NOT NULL,
+    completed_at DATETIME NOT NULL,
+    outcome ENUM('successful', 'partially_successful', 'referred_to_external', 'unsuccessful') NOT NULL DEFAULT 'successful',
+    summary_notes TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_comp_request
+        FOREIGN KEY (request_id) REFERENCES service_requests (request_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_comp_referral
+        FOREIGN KEY (referral_id) REFERENCES referrals (referral_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_comp_outcome (outcome)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q189,"CREATE feedback, CASCADE",database/schema.sql:371 (); database/schema_safe.sql:357 (),"CREATE TABLE feedback (
+    feedback_id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL UNIQUE,
+    member_id INT NOT NULL,
+    organization_id INT NOT NULL,
+    is_helpful BOOLEAN NOT NULL,
+    rating TINYINT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT NULL,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_fb_request
+        FOREIGN KEY (request_id) REFERENCES service_requests (request_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_fb_member
+        FOREIGN KEY (member_id) REFERENCES users (user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_fb_org
+        FOREIGN KEY (organization_id) REFERENCES organizations (organization_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_fb_org_helpful (organization_id, is_helpful)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q190,"CREATE notifications, CASCADE",database/schema.sql:394 (); database/schema_safe.sql:380 (),"CREATE TABLE notifications (
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type ENUM('referral_sent', 'referral_accepted', 'referral_rejected', 'backup_rescue', 'deadline_approaching', 'deadline_missed', 'feedback_invitation', 'system') NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    related_request_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notif_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_notif_request
+        FOREIGN KEY (related_request_id) REFERENCES service_requests (request_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_notif_user_read (user_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",schema; schema_safe,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q191,ALTER users,teammate_review/dhairya/001_firebase_auth.sql:3 (),"ALTER TABLE users
+    ADD COLUMN firebase_uid VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NULL UNIQUE,
+    MODIFY COLUMN password_hash VARCHAR(255) NULL",DDL,Schema/DDL,"Define or strengthen persisted entities, keys, relationships, constraints and indexes.",001_firebase_auth,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q192,INSERT roles,database/seed.sql:39 (); database/create_demo_data.py:19 (main),"INSERT INTO roles (role_id, role_name, description)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic roles data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q193,INSERT users,database/seed.sql:48 (); database/create_demo_data.py:25 (main),"INSERT INTO users (user_id, role_id, email, password_hash, is_active, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic users data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q194,INSERT member_profiles,database/seed.sql:72 (); database/create_demo_data.py:27 (main),"INSERT INTO member_profiles (profile_id, user_id, first_name, last_name, phone, address, city, preferred_contact_method)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic member_profiles data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q195,INSERT organizations,database/seed.sql:83 (); database/create_demo_data.py:33 (main),"INSERT INTO organizations (organization_id, name, contact_email, contact_phone, address, city, status, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic organizations data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q196,INSERT organization_representatives,database/seed.sql:94 (); database/create_demo_data.py:35 (main),"INSERT INTO organization_representatives (representative_id, user_id, organization_id, full_name, job_title, phone, is_primary_contact)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic organization_representatives data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q197,INSERT organization_applications,database/seed.sql:104 (),"INSERT INTO organization_applications (application_id, organization_id, submitted_by_user_id, reviewed_by_user_id, status, submission_notes, decision_notes, decided_at, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic organization_applications data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q198,INSERT service_categories,database/seed.sql:114 (); database/create_demo_data.py:28 (main),"INSERT INTO service_categories (category_id, name, description, is_active)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic service_categories data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q199,INSERT services,database/seed.sql:123 (); database/create_demo_data.py:29 (main),"INSERT INTO services (service_id, category_id, name, description, delivery_mode, is_active)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic services data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q200,INSERT service_areas,database/seed.sql:135 (); database/create_demo_data.py:30 (main),"INSERT INTO service_areas (area_id, city, region_name, is_active)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic service_areas data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q201,INSERT organization_services,database/seed.sql:145 (); database/create_demo_data.py:37 (main),"INSERT INTO organization_services (organization_service_id, organization_id, service_id, service_area_id, status, active_referral_limit, current_active_referrals)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic organization_services data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q202,INSERT priority_levels,database/seed.sql:171 (); database/create_demo_data.py:31 (main),"INSERT INTO priority_levels (priority_id, level_name, deadline_hours, description)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic priority_levels data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q203,INSERT service_priority_support,database/seed.sql:179 (); database/create_demo_data.py:39 (main),"INSERT INTO service_priority_support (support_id, organization_service_id, priority_id, is_supported)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic service_priority_support data; repeated rows and alternate insert forms are one family.,seed; create_demo_data.main,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q204,INSERT organization_availability,database/seed.sql:201 (),"INSERT INTO organization_availability (availability_id, organization_service_id, action, reason, recorded_at, recorded_by_user_id)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic organization_availability data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q205,INSERT service_requests,database/seed.sql:210 (),"INSERT INTO service_requests (request_id, member_id, service_id, service_area_id, priority_id, title, description, status, attendance_deadline, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic service_requests data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q206,INSERT referrals,database/seed.sql:235 (),"INSERT INTO referrals (referral_id, request_id, organization_id, attempt_number, is_backup, status, response_deadline, responded_at, rejection_reason, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic referrals data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q207,INSERT referral_status_history,database/seed.sql:263 (),"INSERT INTO referral_status_history (history_id, referral_id, old_status, new_status, changed_by_user_id, notes, changed_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic referral_status_history data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q208,INSERT attendance_records,database/seed.sql:293 (),"INSERT INTO attendance_records (attendance_id, request_id, referral_id, attended_by_representative_id, first_attended_at, is_on_time, notes, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic attendance_records data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q209,INSERT service_completions,database/seed.sql:304 (),"INSERT INTO service_completions (completion_id, request_id, referral_id, completed_at, outcome, summary_notes, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic service_completions data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q210,INSERT feedback,database/seed.sql:315 (),"INSERT INTO feedback (feedback_id, request_id, member_id, organization_id, is_helpful, rating, comment, submitted_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic feedback data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q211,INSERT notifications,database/seed.sql:325 (),"INSERT INTO notifications (notification_id, user_id, type, title, message, is_read, related_request_id, created_at)  VALUES (<synthetic values omitted>)",DML,Seed INSERT,Populate synthetic notifications data; repeated rows and alternate insert forms are one family.,seed,Static source inventory; consult FINAL_TEST_REPORT.md for executed integration paths,True,
+Q212,BEGIN transaction boundary,app/auth.py:111 (resolve_identity); app/registration.py:78 (save_profile); app/services/attendance.py:16 (record_attendance); app/services/attendance.py:92 (handle_request_attended); app/services/cancellations.py:13 (cancel_request); app/services/completions.py:23 (complete_referral); app/services/feedback.py:22 (submit_feedback); app/services/feedback.py:75 (handle_feedback_submitted); app/services/guest_requests.py:82 (create_guest_request); app/services/manual_assignment.py:33 (assign_request); app/services/member_profiles.py:31 (update_profile); app/services/notifications.py:35 (handle_referral_created); app/services/offerings.py:21 (add_offering); app/services/offerings.py:98 (update_offering); app/services/organization_approvals.py:42 (decide_application); app/services/organization_profiles.py:45 (update_organization_profile); app/services/organization_registration.py:32 (register_organization); app/services/organization_status.py:13 (change_organization_status); app/services/referrals.py:19 (accept_referral); app/services/referrals.py:76 (reject_referral); database/create_demo_data.py:12 (main),with session.begin(): or engine.begin(): establishes a transaction,TCL,Transaction control,"Keep related business mutations, capacity changes and outbox writes atomic.",Transactional workflow integrity,"Source boundary inventory; selected rollback/replay/locking paths verified on isolated MySQL, not every listed execution path",False,
+Q213,COMMIT transaction boundary,app/auth.py:111 (resolve_identity); app/registration.py:78 (save_profile); app/requests.py:180 (create_request); app/services/attendance.py:16 (record_attendance); app/services/attendance.py:92 (handle_request_attended); app/services/cancellations.py:13 (cancel_request); app/services/completions.py:23 (complete_referral); app/services/feedback.py:22 (submit_feedback); app/services/feedback.py:75 (handle_feedback_submitted); app/services/guest_requests.py:82 (create_guest_request); app/services/manual_assignment.py:33 (assign_request); app/services/member_profiles.py:31 (update_profile); app/services/notifications.py:35 (handle_referral_created); app/services/offerings.py:21 (add_offering); app/services/offerings.py:98 (update_offering); app/services/organization_approvals.py:42 (decide_application); app/services/organization_profiles.py:45 (update_organization_profile); app/services/organization_registration.py:32 (register_organization); app/services/organization_status.py:13 (change_organization_status); app/services/referrals.py:19 (accept_referral); app/services/referrals.py:76 (reject_referral); database/create_demo_data.py:12 (main),successful transaction context exit or explicit session.commit(),TCL,Transaction control,"Keep related business mutations, capacity changes and outbox writes atomic.",Transactional workflow integrity,"Source boundary inventory; selected rollback/replay/locking paths verified on isolated MySQL, not every listed execution path",False,
+Q214,ROLLBACK transaction boundary,app/auth.py:111 (resolve_identity); app/registration.py:78 (save_profile); app/requests.py:183 (create_request); app/services/attendance.py:16 (record_attendance); app/services/attendance.py:92 (handle_request_attended); app/services/cancellations.py:13 (cancel_request); app/services/completions.py:23 (complete_referral); app/services/feedback.py:22 (submit_feedback); app/services/feedback.py:75 (handle_feedback_submitted); app/services/guest_requests.py:82 (create_guest_request); app/services/manual_assignment.py:33 (assign_request); app/services/member_profiles.py:31 (update_profile); app/services/notifications.py:35 (handle_referral_created); app/services/offerings.py:21 (add_offering); app/services/offerings.py:98 (update_offering); app/services/organization_approvals.py:42 (decide_application); app/services/organization_profiles.py:45 (update_organization_profile); app/services/organization_registration.py:32 (register_organization); app/services/organization_status.py:13 (change_organization_status); app/services/referrals.py:19 (accept_referral); app/services/referrals.py:76 (reject_referral); database/create_demo_data.py:12 (main); tools/complete_referral_demo.py:44 (main); tools/feedback_demo.py:42 (main),failed transaction context exit or explicit session.rollback(),TCL,Transaction control,"Keep related business mutations, capacity changes and outbox writes atomic.",Transactional workflow integrity,"Source boundary inventory; selected rollback/replay/locking paths verified on isolated MySQL, not every listed execution path",False,

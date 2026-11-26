@@ -1,0 +1,39 @@
+{
+  "environment": "Isolated SQLite in-memory synthetic fixture; not a MySQL production benchmark",
+  "services_in_fixture": 45,
+  "requests_in_fixture": 50,
+  "member_requests_in_fixture": 45,
+  "date": "2026-11-25",
+  "cases": [
+    {
+      "page": "Public browse services",
+      "before": {
+        "queries": 47,
+        "service_records_returned": 45,
+        "elapsed_ms": 7.417
+      },
+      "after": {
+        "queries": 3,
+        "displayed": 20,
+        "service_rows_fetched": 21,
+        "has_next": true,
+        "elapsed_ms": 1.648
+      }
+    },
+    {
+      "page": "Individual request history",
+      "before": {
+        "queries": 1,
+        "request_records_returned": 45,
+        "elapsed_ms": 2.564
+      },
+      "after": {
+        "queries": 1,
+        "displayed": 20,
+        "request_rows_fetched": 21,
+        "has_next": true,
+        "elapsed_ms": 1.152
+      }
+    }
+  ]
+}

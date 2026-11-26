@@ -1,143 +1,146 @@
-> Current frontend update: `/` serves the latest team landing page; `/get-connected` serves the
-> latest team request form and its session-owned confirmation. The earlier demo is preserved at
-> `/demo/request`. See `docs/testing/ServiceRequestCreated_TEST_GUIDE.md` for the current form flow.
-> The notes below include earlier verification history; the new path does not reuse demo member 9.
-
 # CareConnect
 
-Community wellness referrals for ENSF 607/608, University of Calgary; SDG 17.
-Local synthetic demo only. CareConnect provides non-medical referrals, not emergency assistance.
+Community wellness referrals for ENSF 607/608 at the University of Calgary, aligned
+with SDG 17 (primary) and SDG 3 (secondary). CareConnect is a university project for non-medical community support,
+not emergency assistance. Use synthetic data for demonstrations.
 
-## Open the frontend
+## Project structure
 
-The working Flask application serves the request interface at **http://127.0.0.1:5000/**
-and **http://127.0.0.1:5000/get-connected**. There is no separate frontend server or build.
-Restart Flask if an older process still serves the previous JSON home response.
+| Path | Purpose |
+| --- | --- |
+| `app/` | Flask application, API routes, authentication, and business services |
+| `frontend/` | Current Jinja templates, styles, scripts, and local Bootstrap assets |
+| `app/templates/`, `app/static/` | Separate legacy request demonstration |
+| `database/` | SQL baselines, sample data, analytical queries, diagrams, and normalization report |
+| `deploy/` | Hosting configuration and read-only schema preflight |
+| `tools/` | Interactive Firebase and synthetic workflow verification utilities |
+| `tests/` | Focused password, verified-registration, authorization, pagination, and event regression tests |
+| `docs/` | Authentication, frontend integration, and hosting documentation |
 
-The interface reuses the existing CareConnect shared layout, footer and stylesheet from
-origin/main, adapting navigation and replacing its placeholder request form. Bootstrap 5.3.3
-CSS is stored locally with its license header, so no CDN is required during the demonstration.
-No React, Vue, Node runtime or frontend build pipeline is required.
+The frontend is served by Flask; no Node runtime or frontend build is required.
+Firebase browser authentication loads its SDK from Google and requires network access.
 
-## Start locally (Windows Command Prompt)
+## Functional and quality requirements
 
-Keep Docker Desktop running. Preserve .env credentials. The provided Compose mapping uses
-MySQL at 127.0.0.1:3307 and RabbitMQ at 127.0.0.1:5673 for host-run Python processes.
-The baseline, migration 001 and synthetic dataset have already been provisioned on the
-local database used for verification. Do not rerun schema.sql, seed.sql or initialization.
-A new environment needs separate database provisioning; see database/migrations/001_checkin_workflow.sql.
+| Role | Implemented scope |
+| --- | --- |
+| Individual | Verified registration/recovery, login/logout/reset, profile, catalog search, owned requests/tracking/history, notifications and completed-service feedback. |
+| Organization | Verified application, separate coordinator approval, profile, service/capacity/availability settings, owned referrals, attendance/completion and authorized notifications. |
+| Coordinator | SQL-owned role, application decisions, organization management, all requests/search/filters/sorts/pages/history, attention/manual assignment choices and global reports. |
 
-```cmd
-.\.venv\python.exe -m pip install -r requirements.txt
+Security requires verified Firebase identity plus server-owned SQL roles, object
+ownership and protected browser mutations. Reliability requires transactional
+business/outbox writes, confirmed publication and idempotent processing. Efficiency
+requires SQL-side filters/order and bounded lists with global aggregates. Usability
+requires consistent branding, responsive forms and clear non-emergency language.
+Maintainability requires shared validation/lifecycle code, reproducible isolated
+tests and documented provisioning. These are project requirements; broader uptime,
+load and production-security guarantees have not been established.
+
+## Checkout status
+
+The Flask application and all seven worker entry points import successfully. The
+active frontend, mandatory email verification and registration recovery, bounded
+SQL lists, and existing workflow contracts have automated regression coverage.
+The November 26, 2026 pass verified 112 regression tests, 36 active templates,
+97 synthetic browser checks and real MySQL/RabbitMQ workflows in disposable Docker
+containers. The hosting image built and passed a localhost-only Gunicorn/MySQL
+smoke. Read-only Firebase Admin checks confirmed all three mapped accounts are
+verified; all four coordinator records remain. No live records were changed.
+
+The November 26 checks confirmed the corrected Firebase policy and zero live
+capacity mismatches. Participant testing, real inbox links and hosted deployment
+remain outstanding. See the
+
+[final test report](docs/testing/FINAL_TEST_REPORT.md),
+[submission checklist](docs/FINAL_SUBMISSION_CHECKLIST.md), and
+[manual user-testing checklist](docs/testing/ad_hoc_user_testing.csv).
+
+## Local setup
+
+The hosting image uses Python 3.12. For a Windows development environment:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Create a private `.env` from `.env.example` for a new environment; preserve any
+existing configuration. Set `SECRET_KEY` and `DATABASE_URL`. Configure Firebase
+Application Default Credentials outside the repository and use the project matching
+the frontend's public web configuration. See [authentication](docs/authentication.md).
+The interactive tools also require `FIREBASE_WEB_API_KEY` in their process environment.
+
+For a new machine only, after choosing unused ports and private MYSQL_*/RABBITMQ_*
+credentials, the local infrastructure configuration is started with Docker Desktop running:
+
+```powershell
 docker compose up -d mysql rabbitmq
-set RABBITMQ_PORT=5673
-.\.venv\python.exe -m app.messaging.rabbitmq_config
 ```
 
-Run each process in its own terminal from the repository root:
+Host-run processes use MySQL port 3307 and RabbitMQ port 5673. Container connections
+use ports 3306 and 5672. Existing project containers already occupy the host ports;
+reuse them. Compose now requires private environment passwords; old development
+defaults in Git history need coordinated rotation if reused.
 
-```cmd
-REM Terminal 1: Flask frontend and API
-.\.venv\python.exe run.py
+Database provisioning must use a reviewed schema or export containing the required
+workflow and Firebase changes. `database/schema.sql` drops the database;
+`database/seed.sql` deletes existing rows. `database/schema_safe.sql` still creates
+tables and is not a migration. Do not run these scripts against an existing dataset
+to resolve startup failures. `database/create_demo_data.py` writes synthetic data
+only to an empty, migrated database.
+
+After a valid environment and reviewed existing schema are available, start the
+complete local application with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_local.ps1
 ```
 
-```cmd
-REM Terminal 2: matching
-set RABBITMQ_PORT=5673
-.\.venv\python.exe worker.py
+Use `scripts/check_health.ps1` and `scripts/stop_local.ps1` for managed health/stop.
+Startup refuses existing consumers and unreviewed pending work; see
+[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) for the explicit -ProcessPending option,
+logs and all worker entry points. `run.py` remains a web-only development entry;
+do not launch it on top of the managed server. No startup command creates or
+migrates application tables.
+
+## Application entry points
+
+The source registers `/`, `/services`, `/login`, `/signup`, and `/get-connected`,
+with role-specific pages under `/member`, `/organization`, and `/coordinator`.
+The legacy request interface is `/demo/request`; its shared demo identity is
+restricted to local debug/testing mode and disabled in hosted mode.
+
+See [frontend integration](docs/frontend_integration.md) for route and template
+contracts and [hosting](docs/hosting/HOSTING_RUNBOOK.md) for deployment prerequisites.
+
+## Validation
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe tools/check_submission_readiness.py
+docker compose -f compose.hosting.yml config --no-interpolate --quiet
 ```
 
-```cmd
-REM Terminal 3: organization notifications
-set RABBITMQ_PORT=5673
-.\.venv\python.exe notification_worker.py
-```
+The readiness tool defaults to source/configuration checks. Add `--database` or
+`--rabbitmq` for read-only schema/mapping counts and passive topology checks once
+services are available. It does not create accounts, queues, tables or migrations.
+Browser email-delivery and actual participant testing remain separate from the
+automated checks; record real outcomes in the checklist rather than assuming
+that developer tests establish participant usability.
 
-```cmd
-REM Terminal 4: outgoing event dispatcher
-set RABBITMQ_PORT=5673
-.\.venv\python.exe outbox_dispatcher.py
-```
+## Academic deliverables
 
-Open http://127.0.0.1:5000/. run.py enables the existing local demo member 9 via debug mode.
-Without debug/testing mode, the page shows a disabled preview because authentication is unfinished.
-Do not run test_consumer.py: it competes for matching messages without creating referrals.
+`database/` retains the four ER diagram modules, logical database diagram,
+`CareConnect_Normalization_608_checkin.pdf`, and numbered analytical queries.
+SQL files retain their course and author attribution. A brief historical check-in
+record is retained in the frontend integration guide; it is not current validation.
+The [final logical mapping](docs/database/FINAL_LOGICAL_MAPPING.md) supplements the
+older diagrams with Firebase UID, workflow constraints and the operational outbox.
+The SQL inventory still has 206 qualifying families; the normalization report
+documents dependencies and limitations rather than claiming every table is 3NF.
 
-## Frontend integration
-
-- GET /api/services, /api/service-areas and /api/priorities populate the form with actual IDs.
-- POST /api/requests sends service_id, service_area_id, priority_id, title and description.
-- Successful submission displays the returned ID and initial status.
-- GET /api/requests/<id> polls about every two seconds for up to two minutes.
-- Matched/unmatched and other non-pending states stop automatic polling. Manual refresh stays available.
-- The tab remembers its latest request ID in sessionStorage; reload retrieves it without another POST.
-- Fields disable during submission and remain locked after success. Start another request is explicit.
-- Network/validation/catalog failures are shown without automatically retrying POST.
-- An ambiguous POST failure may still have saved data. Check /api/requests before choosing to submit again.
-
-The API does not return the selected organization or notification state. The UI therefore does not
-invent partner names or claim notification delivery. Its architecture section is explanatory only.
-Notification delivery is verified with the read-only SQL queries in the runbook.
-
-## 60-second check-in demonstration
-
-1. Open the page and point out Demo Mode and the non-medical notice (10 seconds).
-2. Select service, area and priority; enter a synthetic title/description and submit once (15 seconds).
-3. Show the returned ID, initial Submitted status and real polling transition to Matched (15 seconds).
-4. Show the workflow explanation and dispatcher events (10 seconds).
-5. Show the stored referral/notification using runbook SQL, or saved live evidence (10 seconds).
-
-Each new request reserves capacity. Capacity release is not implemented, so avoid unnecessary repeated
-submissions; a full partner pool correctly produces Unmatched. Never reset data for a rehearsal.
-
-## Tests and observed verification
-
-```cmd
-.\.venv\python.exe -B -m pytest -p no:cacheprovider -q
-```
-
-The 26 original backend tests use isolated in-memory SQL and mocked transport. Browser tests are
-optional and require Playwright plus installed Microsoft Edge:
-
-```cmd
-.\.venv\python.exe -m pip install -r requirements-browser.txt
-.\.venv\python.exe -B -m pytest tests/test_frontend.py -p no:cacheprovider -q
-```
-
-Browser tests run a temporary Flask server with an in-memory DATABASE_URL and intercept API calls.
-They do not write to live MySQL. Missing Playwright skips them; an installed Playwright with missing
-Edge must be supplied with Edge before running them. The runtime application does not require Playwright.
-See docs/testing/frontend/verification.md for the observed final results and screenshots.
-
-A separate real browser verification submitted synthetic request 3 through Flask, MySQL and RabbitMQ:
-it matched, created one referral, published both events and stored the representative notification.
-One POST was observed; polling/manual refresh created no duplicates. Existing requests 1 and 2 remained.
-
-## Backend adjustments and limitations
-
-The only backend change for frontend integration is rendering the request template at / and
-/get-connected. The existing APIs, workers, matching logic, tables and migrations are unchanged.
-/health and /health/db retain their existing JSON responses.
-
-Authentication, acceptance/rejection, backups, attendance/completion, capacity release and a notification
-UI remain outside this implementation. The demo identity is shared; do not use real personal data.
-The browser prevents duplicate clicks, but there is no HTTP idempotency key across tabs or ambiguous
-manual retries. Polling stops after two minutes; worker outages leave a truthful Submitted status.
-The live happy path does not prove MySQL concurrent-worker or crash-recovery correctness.
-All work remains local and uncommitted; no Git staging, commits, branches or pushes were performed.
-
-## Further documentation
-
-- CHECKIN_PROGRESS.md: previous backend work and original check-in evidence.
-- docs/testing/checkin_runbook.md: process commands and SQL verification queries.
-- docs/testing/checkin_test_results.md: original 26-test evidence.
-- docs/testing/frontend/: current frontend screenshots and live verification evidence.
-
-
-## Latest team login (separate integration phase)
-
-Open http://127.0.0.1:5000/login to use the latest teammate login design.
-It uses frontend/templates and /team-static assets; the earlier demo request UI remains at /.
-Login now connects Firebase email/password to the existing /api/auth/me backend.
-No role-dashboard redirect, signup handler or server-session integration is claimed.
-See docs/testing/FIREBASE_LOGIN_TEST_GUIDE.md for prerequisites, commands and local checks.
+The owner applied migration 003 to the current live database and verified all
+21 table fingerprints and 9/9 managed processes. The
+[migration runbook](docs/database/REFERRAL_MIGRATION_RUNBOOK.md) is retained for
+separate legacy installations and recovery.

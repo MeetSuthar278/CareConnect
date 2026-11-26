@@ -1,109 +1,118 @@
-# Backend Firebase authentication foundation
+# Authentication
 
-Current policy (approved October 30, 2026): member accounts do not require email
-verification. Representatives and coordinators still require email_verified=true.
-The backend resolves the SQL-owned role before enforcing that rule; custom claims,
-form roles and email collisions cannot grant privileged access. See
-[the policy test guide](testing/EmailVerificationPolicy_TEST_GUIDE.md).
+CareConnect uses Firebase email/password identity and SQL-owned roles. The source
+contains bearer-token APIs and browser session adapters. Automated checks use
+synthetic identities; real inbox delivery and live sign-in require the team checks
+in the [submission report](SUBMISSION_READINESS.md).
 
-Implemented locally after backend-only approval. Frontend integration and database migration
-execution are separate approval gates. No frontend template, stylesheet, database definition,
-existing account or schema was changed in this phase.
+## Identity and authorization
 
-## Contract
+`GET /api/auth/me` requires `Authorization: Bearer <Firebase ID token>` and returns
+`user_id`, `email`, `role`, and `organization_id`. Firebase verification checks
+revocation and disabled accounts. Roles and organization membership come from SQL,
+not form fields or Firebase custom role claims.
 
-GET /api/auth/me requires Authorization: Bearer <Firebase ID token>.
-Success returns user_id, email, SQL role and organization_id (null for nonrepresentatives).
-Missing/invalid/revoked/expired tokens return 401; unverified privileged email, inactive user or invalid
-representative linkage returns 403. Existing-email account linking conflicts return 409.
-Missing credentials, SDK, migration or database availability produces 503 without exposing details.
+Every SQL role requires `email_verified=true` from an Admin-SDK-validated token.
+`/api/auth/me` never creates a user or links by email. Verified identities without
+completed SQL registration receive HTTP 409 with `code=registration-required`.
+Roles always come from SQL; public registration can create only a member or a
+pending organization representative, never a coordinator.
 
-Firebase Admin verifies the configured project and revoked/disabled accounts. Roles and organization
-ownership come from MySQL, not from client fields or Firebase custom role claims. A new authenticated
-identity can create only a member. Existing accounts are never linked by email automatically.
-Administrator-controlled representative/coordinator UID linking is a later separately approved task.
+Missing or invalid tokens return 401; insufficient privileges or inactive accounts
+return 403; account-linking conflicts return 409; unavailable verification or database
+services return 503. Business handlers separately enforce ownership and state.
 
-This adapts Dhairya's implementation while preserving the working application factory and ORM models.
-Authentication uses an independent SQLAlchemy Session/transaction. It deliberately reads the Firebase
-column through authentication-only SQL so adding the endpoint does not make existing User ORM queries
-fail before the team-approved migration is applied. The existing model metadata remains partial;
-SQL migrations remain authoritative. No fallback to demo identity occurs on the new auth endpoint.
+## Browser sessions
 
-## Dependencies and prerequisites
+`frontend/static/js/login.js` uses Firebase in-memory persistence, calls the identity
+API, and posts to the appropriate session endpoint:
 
-requirements.txt adds firebase-admin>=7.0,<8.0 without replacing existing pinned packages.
-FIREBASE_PROJECT_ID uses the reviewed default careconnect-7132c and can be overridden in the environment.
-Do not commit service-account keys or paste them into chat. Configure Application Default Credentials
-locally using the team's approved credentials arrangement. Revocation checks require backend access to
-Firebase Auth. The project must match the client configuration.
+| SQL role | Session endpoint | Destination |
+| --- | --- | --- |
+| Member | `/api/auth/session` | `/member` |
+| Representative | `/api/auth/organization-session` | `/organization` |
+| Coordinator | `/api/auth/coordinator-session` | `/coordinator` |
 
-The pending teammate_review/dhairya/001_firebase_auth.sql adds nullable unique firebase_uid and allows
-password_hash=NULL. It has NOT been applied by this phase and is not copied into migration history.
-It must receive explicit execution approval and team confirmation first. Do not run seed or baseline SQL.
+Session creation checks the login CSRF token and recent Firebase authentication.
+Cookies are HttpOnly, use SameSite=Lax, and expire after one hour. Secure cookies
+are used for HTTPS requests and are mandatory for all session cookies in hosted mode.
+Protected browser requests verify Firebase cookies and recheck SQL identity.
+Navigation role/name fields are presentation state, not authorization evidence.
 
-## Integration boundaries
+## Verified registration and recovery
 
-firebase_required supplies g.current_user as a frozen Identity. roles_required authenticates then
-checks a SQL-owned role. Business endpoints must additionally enforce record ownership and valid state.
-No rejection API, backup consumer or other event was implemented in this phase.
+Both registration forms validate the existing password policy before calling
+Firebase: at least eight characters, one ASCII uppercase letter and one supported
+special character, with matching confirmation. Lowercase letters and numbers are
+optional. Existing login and recovery passwords have no new complexity rule.
 
-Existing demo request endpoints remain unchanged and are NOT yet secured by Firebase. They must not
-be presented as production-private APIs. Their authentication integration belongs to the next approved
-phase. No auth cookies or session-login endpoints were introduced: this foundation uses explicit bearer
-headers only, not automatic browser credentials. Cookie-based login would need CSRF/session design.
+Firebase first creates an authentication account and sends a verification email.
+The page switches to `/register/verify` without discarding its in-memory Firebase
+session and pending form details. This is an intentional in-document transition;
+a full reload would lose those details. The verification screen shows the account
+email, inbox/spam guidance, retry and resend buttons, loading state and a 60-second
+resend cooldown. Firebase remains authoritative for rate limiting.
 
-GET /api/auth/me provisions a first-time member, matching Dhairya's account behavior; it is not a purely
-read-only account probe. Repeated login retains the same member. Profile creation and registration UX
-remain separate work. No member profile is automatically created here.
+After the user opens the link, the application reloads the Firebase user and forces
+an ID-token refresh. Flask independently validates that token and its verified
+claim before `/api/auth/register/profile` or `/api/auth/register/organization` writes
+anything. Member user/profile creation is one transaction. Organization user,
+representative, organization and application creation is one transaction with status
+`pending` and application status `submitted`. Exact retries return `already_processed`;
+conflicting retries preserve existing details. A successful completion returns to
+login; it does not establish an authenticated application session.
 
-The existing frontend/templates/auth/login.html is preserved. Dhairya's auth.js is not activated because
-its expected DOM elements differ. Login UI wiring, session navigation and visible verification/error
-states require the next precise design approval. The earlier demo UI remains active.
+After closing or reloading the page, use **Finish registration** on the login page.
+Sign in with the original password, check verification, and re-enter details if SQL
+registration is incomplete. An already registered account returns to login. No
+passwords, Firebase tokens or pending profile details are put in local/session
+storage, query strings or Flask session cookies. Expired/missing email links can be
+replaced by resending; unknown completion outcomes can be retried safely.
 
-## Evidence and limitations
+Unverified tokens and unverified session cookies cannot open protected pages.
+Pending/rejected organizations cannot view referrals or manage services; verified
+representatives can still open their approval-status dashboard/profile. Rejection
+is an application result, not an invented organization enum. Verification never
+approves an organization. Suspended partners retain the existing ability to finish
+already accepted work, while acceptance and service management require approval.
 
-Authentication tests use a disposable SQLite database with the expected future columns and mocked
-Firebase verification. They verify business authorization/SQL behavior, not live Google credentials,
-signature/certificate verification, MySQL migration compatibility or complete login UI behavior.
-A live Firebase login has not been performed. No SDK installation or Firebase network request was
-needed for the mocked tests. See testing/AUTHENTICATION_TEST_GUIDE.md.
+Password changes continue to reauthenticate with Firebase. Their unnamed fields
+avoid sending passwords to Flask through native form fallback.
 
-Official references:
-- https://firebase.google.com/docs/auth/admin/verify-id-tokens
-- https://firebase.google.com/docs/auth/admin/manage-sessions
+## Configuration and schema
 
+Use `FIREBASE_PROJECT_ID` matching the public frontend configuration and configure
+Application Default Credentials privately. The browser API key is public client
+configuration; Admin service-account keys must remain outside the repository.
+Interactive utilities require `FIREBASE_WEB_API_KEY` in their process environment.
 
-## Latest-team login integration (October 29, 2026)
+The current SQL baselines contain nullable unique `firebase_uid` and nullable
+`password_hash`; ORM User metadata now matches those migrated fields. The live
+read-only schema check confirms them. Migration 002 is already applied on the
+current database; never reapply it. The teammate Firebase SQL implements the same
+upgrade and is not an additional required migration. Fresh/legacy initialization
+orders are documented in DEPLOYMENT_GUIDE; no startup tool executes migrations.
+ORM metadata is partial and must not be used with `create_all()` to provision it.
 
-This update supersedes the earlier statement that no login route is active.
-GET /login now renders frontend/templates/auth/login.html using the latest team's
-base, navbar, messages and Bootstrap/CSS. The older app/templates tree is not used
-for that route. /team-static/ serves the team assets without shadowing existing /static/.
-The active request UI at / and /get-connected remains unchanged for this phase.
+The legacy demo request APIs use a shared local debug/testing identity rather than
+Firebase. Hosted mode disables that access. Preserve this distinction when testing.
 
-The login template gained only a form ID and nonvisual script/config hooks. The existing
-messages component gained an empty message wrapper; errors/success reuse its alert styling.
-No CSS, labels, headings, input fields, navigation layout or visible technical explanations changed.
-The added login.js signs in with the reviewed Firebase web config, requires verified email,
-obtains a fresh ID token and calls /api/auth/me. Failed backend verification signs out the
-client. Duplicate clicks cannot run simultaneous submissions. Password is cleared after attempts.
-The web API key is public client configuration, not an Admin private key.
+## Firebase Console tasks
 
-Persistence is memory-only. There is no new server session or cookie-based authorization,
-no new dashboard redirect, no registration/reset/verification-email action and no account linking.
-A successful API response is shown through the existing success-message style. Signing in does
-not secure the earlier demo request endpoints; that remains a separately approved integration.
-Services and signup links preserve the team's intended destinations but those pages are not yet
-routed. Continue as Guest uses the existing request route. Only /login uses the new template tree
-at this point. No mock dashboard or stub private-data endpoint was introduced.
+Confirm Email/Password sign-in, authorized local/hosted domains, and verification
+email templates/action links in `careconnect-bfb9e`. The Console password policy
+must match eight characters plus uppercase and special characters, with lowercase
+and numeric requirements off. Keep forced upgrades on sign-in disabled so existing
+passwords remain usable. Live SDK validation confirmed optional lowercase and digits, with both Password@
+and PASSWORD@ accepted and forced upgrades off. See testing/SECURITY_AUDIT.md.
+See [Firebase password policy](https://firebase.google.com/docs/auth/web/password-auth)
+and [email verification](https://firebase.google.com/docs/auth/web/manage-users).
 
-Firebase Admin 7.7.0 was installed in the earlier environment setup. The approved users migration
-was applied and verified separately, preserving four existing users. No migration or database
-transaction ran during this login-UI implementation. Credentials reportedly exist in the user's
-Flask terminal; this implementation process does not inherit another terminal's environment.
-No live Firebase credentials/password/token were obtained or tested here.
+Existing UID mappings need a separate, approved identity review. See the
+[account migration plan](testing/ACCOUNT_MIGRATION_PLAN.md); never relink by email
+alone or automatically verify an account.
 
-Observed full suite: 60 passed, 18 existing SQLite warnings in 34.12s. Seven new login tests use
-mocked browser Firebase SDK responses and mocked identity API responses; they do not prove live
-Firebase authentication. Screenshots in testing/login were visually inspected on desktop/mobile.
-See testing/FIREBASE_LOGIN_TEST_GUIDE.md before proceeding to another phase.
+The login page now offers Forgot your password using Firebase reset email, with
+email validation, a non-enumerating result and friendly failure/cooldown messages.
+No password complexity checks were added to login. Actual email delivery/action
+links must be checked with an owned account; developer browser tests use a fake SDK.

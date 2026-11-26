@@ -1,0 +1,54 @@
+{
+  "users": 17,
+  "organizations": 7,
+  "organization_services": 25,
+  "service_requests": 40,
+  "referrals": 29,
+  "referral_status_history": 76,
+  "coordinators": 4,
+  "attempt_counts": {
+    "1": 26,
+    "2": 3
+  },
+  "flag_mismatches": 0,
+  "invalid_attempt_sequences": 0,
+  "snapshot": "Read-only live pre-migration aggregates",
+  "owner_verified_post_migration": {
+    "evidence_source": "Project owner terminal verification supplied for submission",
+    "rehearsal_passed": true,
+    "live_migration_applied": true,
+    "table_fingerprints_preserved": 21,
+    "legacy_column_removed": true,
+    "legacy_index_removed": true,
+    "retained_referral_attributes_preserved": true,
+    "managed_processes_running": 9,
+    "managed_processes_expected": 9,
+    "flask_application_creation": "PASS",
+    "worker_entry_points_verified": 7,
+    "jinja_templates_verified": 36,
+    "mysql_schema": "PASS",
+    "firebase_configuration": "PASS",
+    "rabbitmq_topology": "PASS",
+    "processed_after_authorized_startup": {
+      "AttendanceOverdue": 3
+    },
+    "published_events": {
+      "AttendanceOverdue": 9,
+      "AcceptanceTimedOut": 1
+    },
+    "pending_outbox_events": 0,
+    "outbox_publication_errors": 0,
+    "acceptance_deadline_candidates": 0,
+    "attendance_deadline_candidates": 0,
+    "capacity_counter_mismatches": 0,
+    "final_totals": {
+      "tables": 21,
+      "users": 17,
+      "organizations": 7,
+      "organization_service_offerings": 25,
+      "service_requests": 40,
+      "referrals": 29,
+      "published_outbox_events": 10
+    }
+  }
+}
