@@ -68,3 +68,9 @@ context, and Docker COPY uses explicit runtime paths. Pattern scanning is not a
 proof of absence: review Git staging and secret-manager/Console settings separately.
 No public deployment, password change, account verification bypass or role reduction
 was used to obtain passing tests.
+
+
+
+## Later hosting update
+
+The owner confirmed HTTPS access on Azure and new private hosting credentials. Earlier statements about no public deployment describe the original audit date. Historical credential remediation and Firebase API restrictions still require confirmation. The audit is not a penetration-test certification.
