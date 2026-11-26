@@ -71,6 +71,23 @@ was used to obtain passing tests.
 
 
 
-## Later hosting update
+## Final Repository Security Review
 
+The final repository security scan was performed on November 26, 2026.
+
+| Check | Result |
+|---|---|
+| Working files scanned | 264 |
+| Historical Git blobs scanned | 403 |
+| Tracked private environment files | 0 |
+| Current credential matches | 0 |
+| Historical findings | 4 |
+
+The current repository uses environment variables and private configuration files for credentials.
+
+The four historical findings relate to old development credentials and Firebase web API identifiers. New private hosting credentials were generated for the Azure deployment.
+
+Historical credentials must not be reused. Their rotation or retirement and Firebase API restrictions require separate confirmation.
+
+This scan is a basic security check and does not guarantee complete application security.
 The owner confirmed HTTPS access on Azure and new private hosting credentials. Earlier statements about no public deployment describe the original audit date. Historical credential remediation and Firebase API restrictions still require confirmation. The audit is not a penetration-test certification.
