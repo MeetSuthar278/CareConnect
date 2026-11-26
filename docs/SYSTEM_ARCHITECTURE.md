@@ -30,6 +30,6 @@ See [event architecture](EVENT_DRIVEN_ARCHITECTURE.md) for the seven implemented
 
 ## System Architecture Diagram
 
-![System Architecture](architecture/SYSTEM_ARCHITECTURE.png)
+![System Architecture](architecture/SYSTEM_ARCHITECTURE.jpeg)
 
 [Editable Draw.io Diagram](architecture/SYSTEM_ARCHITECTURE.drawio)
