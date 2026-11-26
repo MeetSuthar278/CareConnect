@@ -25,8 +25,8 @@ The durable `careconnect.events` exchange routes messages to five queues. Events
 
 See [workflow test evidence](testing/EVENT_WORKFLOW_TEST_REPORT.md).
 
-## System Architecture Diagram
+## Event-Driven Architecture Diagram
 
-![System Architecture](architecture/SYSTEM_ARCHITECTURE.png)
+![Event-Driven Architecture](architecture/EVENT_DRIVEN_ARCHITECTURE.png)
 
-[Editable Draw.io Diagram](architecture/SYSTEM_ARCHITECTURE.drawio)
+[Editable Draw.io Diagram](architecture/EVENT_DRIVEN_ARCHITECTURE.drawio)
