@@ -1,0 +1,18 @@
+{% if pagination is defined and pagination %}
+<nav class="list-pagination" aria-label="Results pages">
+    <p class="form-hint mb-0" role="status">
+        {% if pagination.displayed %}Showing {{ pagination.start }}–{{ pagination.end }} ({{ pagination.displayed }} records){% else %}No records on this page.{% endif %}
+        · Page {{ pagination.page }}
+        {% if not pagination.displayed and pagination.page > 1 %}<a href="{{ pagination.url(1) }}">Return to the first page</a>{% endif %}
+    </p>
+    <ul class="pagination mb-0">
+        <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+            {% if pagination.page > 1 %}<a class="page-link" href="{{ pagination.url(pagination.page - 1) }}" rel="prev">Previous</a>{% else %}<span class="page-link" aria-disabled="true">Previous</span>{% endif %}
+        </li>
+        <li class="page-item"><span class="page-link" aria-current="page">{{ pagination.page }}</span></li>
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            {% if pagination.has_next %}<a class="page-link" href="{{ pagination.url(pagination.page + 1) }}" rel="next">Next</a>{% else %}<span class="page-link" aria-disabled="true">Next</span>{% endif %}
+        </li>
+    </ul>
+</nav>
+{% endif %}

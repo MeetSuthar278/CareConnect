@@ -1,4 +1,3 @@
-// Shared frontend behavior; actions remain ordinary Flask form submissions.
 document.addEventListener("DOMContentLoaded", function () {
     function showError(field) {
         if (!field.id) return;
@@ -21,9 +20,20 @@ document.addEventListener("DOMContentLoaded", function () {
         var fields = form.querySelectorAll("input, select, textarea");
         var password = form.querySelector("[name='password']");
         var confirmation = form.querySelector("[name='confirm_password']");
+        fields.forEach(function (field) {
+            if (!field.required || field.disabled || field.type === 'hidden' || !field.id) return;
+            var label = form.querySelector('label[for="' + CSS.escape(field.id) + '"]');
+            if (label && !label.querySelector('.required-marker')) {
+                var marker = document.createElement('span');
+                marker.className = 'required-marker';
+                marker.textContent = ' (required)';
+                label.appendChild(marker);
+            }
+        });
         function validate() {
             fields.forEach(function (field) {
-                field.setCustomValidity("");
+                // Registration's shared password validator owns these fields.
+                if (!field.hasAttribute("data-registration-password")) field.setCustomValidity("");
                 if (field.type === "tel" && field.value) {
                     var digits = field.value.replace(/\D/g, "");
                     if (!/^[+\d\s().-]+$/.test(field.value) || digits.length < 7 || digits.length > 15) {
@@ -33,8 +43,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (field.required && ["text", "textarea"].includes(field.type) && field.value && !field.value.trim()) {
                     field.setCustomValidity("Enter a value using more than spaces.");
                 }
+                if (field.dataset.maxBytes && new TextEncoder().encode(field.value).length > Number(field.dataset.maxBytes)) {
+                    field.setCustomValidity('Use a shorter description.');
+                }
             });
-            if (password && confirmation && password.value !== confirmation.value) {
+            if (password && confirmation && !confirmation.hasAttribute("data-registration-password") && password.value !== confirmation.value) {
                 confirmation.setCustomValidity("Passwords do not match.");
             }
             form.querySelectorAll("[data-delivery-group]").forEach(function (group) {
@@ -46,6 +59,9 @@ document.addEventListener("DOMContentLoaded", function () {
                     field.removeAttribute("aria-invalid");
                     var error = document.getElementById(field.id + "_error");
                     if (error) error.textContent = "";
+                } else {
+                    var existingError = document.getElementById(field.id + "_error");
+                    if (existingError) existingError.textContent = field.validationMessage;
                 }
             });
         }
@@ -75,7 +91,7 @@ document.addEventListener("DOMContentLoaded", function () {
         function showPriorityText() {
             var option = priority.selectedOptions[0];
             var hours = option && option.getAttribute("data-hours");
-            priorityHelp.textContent = hours ? "Response window: " + hours + " hours." : "";
+            priorityHelp.textContent = hours ? "Service attendance target: " + hours + " hours after submission. Availability is confirmed by the organization." : "";
         }
         priority.setAttribute("aria-describedby", "priority_help");
         priority.addEventListener("change", showPriorityText);

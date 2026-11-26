@@ -10,18 +10,18 @@
     <a href="{{ url_for('request_form') }}" class="btn-main">Get Connected</a>
 </div>
 
-<!-- Filter by status -->
 <form method="get" action="{{ url_for('my_requests') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
     <div>
         <label for="status" class="form-label">Status</label>
         <select id="status" name="status" class="form-select">
             <option value="">All</option>
             {% for s in request_statuses %}
-                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+                <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s | display_label }}</option>
             {% endfor %}
         </select>
     </div>
-    <button type="submit" class="btn-outline">Filter</button>
+    {% include 'components/list_controls.html' %}
+    <button type="submit" class="btn-outline">Apply filters</button>
 </form>
 
 {% if requests %}
@@ -31,7 +31,7 @@
                 <tr>
                     <th>Reference</th>
                     <th>Service</th>
-                    <th>Priority</th>
+                    <th>Preferred time frame</th>
                     <th>Organization</th>
                     <th>Status</th>
                     <th>Date</th>
@@ -46,8 +46,8 @@
                         <td>{{ priority_deadline(r) }}</td>
                         <td>{{ r.org_name or 'Not assigned yet' }}</td>
                         <td>{{ status_label(r.status) }}</td>
-                        <td>{{ r.created_at }}</td>
-                        <td><a href="{{ url_for('request_details', request_id=r.request_id) }}">View</a></td>
+                        <td>{{ r.created_at | display_time }}</td>
+                        <td><a href="{{ url_for('request_details', request_id=r.request_id, **pagination.current_query) }}">View</a></td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -57,4 +57,5 @@
     <div class="note-box">No requests found.</div>
 {% endif %}
 
+{% include 'components/pagination.html' %}
 {% endblock %}

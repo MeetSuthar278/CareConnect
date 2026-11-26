@@ -1,11 +1,5 @@
-{#
-    Navbar
-    The links change by role. Flask must store the role in session['role']
-    Roles: 'individual', 'organization', 'coordinator'
-    If there is no role, the visitor is not logged in (guest).
-#}
+{# Session role controls navigation; backend handlers enforce authorization. #}
 
-{# small helper to make one menu link and mark the current page as active #}
 {% macro nav_link(endpoint, label) %}
     {% set target = url_for(endpoint) %}
     {% set section = endpoint in ['browse_services', 'my_requests', 'org_requests', 'coord_requests', 'org_services', 'request_form'] %}
@@ -22,7 +16,6 @@
 <nav class="navbar navbar-expand-lg site-nav" aria-label="Main navigation">
     <div class="container">
 
-        {# Text-only CareConnect brand. #}
         <a class="brand" href="{{ url_for('home') }}">
             CareConnect
         </a>
@@ -45,8 +38,8 @@
 
                 {% elif role == 'organization' %}
                     {{ nav_link('org_dashboard', 'Dashboard') }}
-                    {{ nav_link('org_requests', 'Requests') }}
-                    {{ nav_link('org_services', 'My Services') }}
+                    {% if g.organization.raw_status != 'pending' %}{{ nav_link('org_requests', 'Referrals') }}{% endif %}
+                    {% if g.organization.raw_status == 'approved' %}{{ nav_link('org_services', 'My Services') }}{% endif %}
                     {{ nav_link('org_profile', 'Profile') }}
 
                 {% elif role == 'coordinator' %}
@@ -57,12 +50,11 @@
                     {{ nav_link('coord_reports', 'Reports') }}
 
                 {% elif not landing_page %}
-                    {# Guests can browse services after choosing to continue. #}
+
                     {{ nav_link('home', 'Home') }}
                     {{ nav_link('browse_services', 'Services') }}
                 {% endif %}
 
-                {# Bell (only for logged in users) #}
                 {% if role %}
                     <li class="nav-item ms-md-2">
                         {% include 'components/notification_panel.html' %}

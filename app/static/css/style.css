@@ -1,7 +1,4 @@
-
-/* ==============================
-   CARECONNECT - GLOBAL STYLES
-   ============================== */
+/* CareConnect global styles. */
 
 :root {
     --primary-green: #176B52;
@@ -24,9 +21,7 @@ main {
     min-height: 65vh;
 }
 
-/* ==============================
-   NAVBAR
-   ============================== */
+/* Navbar. */
 
 .navbar {
     padding: 16px 0;
@@ -60,9 +55,7 @@ main {
     color: var(--primary-green);
 }
 
-/* ==============================
-   BUTTONS
-   ============================== */
+/* Buttons. */
 
 .btn-primary-custom {
     background-color: var(--primary-green);
@@ -94,9 +87,7 @@ main {
     color: var(--primary-green);
 }
 
-/* ==============================
-   HOME - HERO SECTION
-   ============================== */
+/* Home - hero section. */
 
 .hero-section {
     padding: 85px 0 75px;
@@ -143,9 +134,7 @@ main {
     text-decoration: underline;
 }
 
-/* ==============================
-   HOW IT WORKS
-   ============================== */
+/* How it works. */
 
 .how-it-works {
     background-color: var(--light-background);
@@ -191,9 +180,7 @@ main {
     margin-bottom: 0;
 }
 
-/* ==============================
-   FOOTER
-   ============================== */
+/* Footer. */
 
 .site-footer {
     border-top: 1px solid var(--border-color);
@@ -221,9 +208,7 @@ main {
     margin: 25px 0 18px;
 }
 
-/* ==============================
-   RESPONSIVE DESIGN
-   ============================== */
+/* Responsive design. */
 
 @media (max-width: 768px) {
     .hero-section {
@@ -253,7 +238,7 @@ main {
 }
 
 
-/* Check-in request flow; extends the original CareConnect shared stylesheet. */
+/* Request form and status display. */
 :root {
     --primary-green:#087f83;
     --dark-green:#173a49;

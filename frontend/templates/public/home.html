@@ -4,10 +4,8 @@
 
 {% block content %}
 
-{# Service options appear after a visitor chooses Continue as Guest. #}
 {% set show_options = session.get('role') or request.args.get('guest') == '1' %}
 
-<!-- Top part of the home page -->
 <section class="hero">
     <p class="eyebrow">Community support made simple</p>
     <h1>Connecting people with the support they need.</h1>
@@ -37,7 +35,7 @@
 </section>
 
 {% if show_options and session.get('role') in [none, 'individual'] %}
-<!-- Service options for guests and signed-in users -->
+
 <section class="row g-3">
 
     <div class="col-12 col-md-4">

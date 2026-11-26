@@ -1,0 +1,402 @@
+{
+  "environment": "Headless Edge; synthetic SQLite; fake Firebase SDK; no external email/account mutations",
+  "checks": [
+    {
+      "name": "individual password Abc@123",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password password123",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password Password123",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password password@123",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password Password@123",
+      "status": "PASS"
+    },
+    {
+      "name": "individual verification gate",
+      "status": "PASS"
+    },
+    {
+      "name": "individual unverified account cannot reach backend",
+      "status": "PASS"
+    },
+    {
+      "name": "individual no credential storage",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password Password@",
+      "status": "PASS"
+    },
+    {
+      "name": "individual verification gate",
+      "status": "PASS"
+    },
+    {
+      "name": "individual unverified account cannot reach backend",
+      "status": "PASS"
+    },
+    {
+      "name": "individual no credential storage",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password PASSWORD@",
+      "status": "PASS"
+    },
+    {
+      "name": "individual verification gate",
+      "status": "PASS"
+    },
+    {
+      "name": "individual unverified account cannot reach backend",
+      "status": "PASS"
+    },
+    {
+      "name": "individual no credential storage",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password empty",
+      "status": "PASS"
+    },
+    {
+      "name": "individual password Password@123 mismatched",
+      "status": "PASS"
+    },
+    {
+      "name": "individual friendly Firebase policy rejection auth/weak-password",
+      "status": "PASS"
+    },
+    {
+      "name": "individual friendly Firebase policy rejection auth/password-does-not-meet-requirements",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password Abc@123",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password password123",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password Password123",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password password@123",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password Password@123",
+      "status": "PASS"
+    },
+    {
+      "name": "organization verification gate",
+      "status": "PASS"
+    },
+    {
+      "name": "organization unverified account cannot reach backend",
+      "status": "PASS"
+    },
+    {
+      "name": "organization no credential storage",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password Password@",
+      "status": "PASS"
+    },
+    {
+      "name": "organization verification gate",
+      "status": "PASS"
+    },
+    {
+      "name": "organization unverified account cannot reach backend",
+      "status": "PASS"
+    },
+    {
+      "name": "organization no credential storage",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password PASSWORD@",
+      "status": "PASS"
+    },
+    {
+      "name": "organization verification gate",
+      "status": "PASS"
+    },
+    {
+      "name": "organization unverified account cannot reach backend",
+      "status": "PASS"
+    },
+    {
+      "name": "organization no credential storage",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password empty",
+      "status": "PASS"
+    },
+    {
+      "name": "organization password Password@123 mismatched",
+      "status": "PASS"
+    },
+    {
+      "name": "organization friendly Firebase policy rejection auth/weak-password",
+      "status": "PASS"
+    },
+    {
+      "name": "organization friendly Firebase policy rejection auth/password-does-not-meet-requirements",
+      "status": "PASS"
+    },
+    {
+      "name": "password reset request and non-enumerating message",
+      "status": "PASS"
+    },
+    {
+      "name": "password reset cooldown",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown reset account receives same result",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax firebase-client.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax login.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax main.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax organization-actions.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax organization-approvals.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax organization-services.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax password-change.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax password-reset.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax register-organization.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax register.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax registration-password.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax registration-recovery.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax registration-verification.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax request-confirmation.js",
+      "status": "PASS"
+    },
+    {
+      "name": "JavaScript syntax request-form.js",
+      "status": "PASS"
+    },
+    {
+      "name": "public / viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public /services viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public /register/individual viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public /register/organization viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public /login viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public /register/verify viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public /get-connected viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "member /member viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "member /member/requests viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "member /member/profile viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization/requests viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization/services viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization/profile viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/requests viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/organizations viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/approvals viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/reports viewport 390",
+      "status": "PASS"
+    },
+    {
+      "name": "public / viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "public /services viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "public /register/individual viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "public /register/organization viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "public /login viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "public /register/verify viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "public /get-connected viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "member /member viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "member /member/requests viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "member /member/profile viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization/requests viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization/services viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "organization /organization/profile viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/requests viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/organizations viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/approvals viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "coordinator /coordinator/reports viewport 1280",
+      "status": "PASS"
+    },
+    {
+      "name": "no uncaught browser exceptions",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    "public-390.png",
+    "coordinator-390.png",
+    "public-1280.png",
+    "coordinator-1280.png"
+  ],
+  "javascript_files_parsed": 15,
+  "status": "PASS",
+  "passed": 97
+}

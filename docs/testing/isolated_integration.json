@@ -1,0 +1,16 @@
+{
+  "isolation": "New Docker containers; random localhost ports; no existing volumes/data/queues",
+  "steps": [
+    {
+      "name": "mysql isolated readiness",
+      "status": "PASS"
+    },
+    {
+      "name": "rabbitmq isolated readiness",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": true,
+  "pytest_exit_code": 0,
+  "status": "PASS"
+}

@@ -8,32 +8,43 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import db
+from app.pagination import Pagination, page_rows, search_term
 from app.auth import roles_required
 from app.member import cookie_claims, csrf_valid, mint_cookie, SESSION_SECONDS
 from app.services.attendance import AttendanceError, record_attendance
 from app.services.completions import CompletionError, complete_referral
 from app.services.referrals import RejectionError, accept_referral, reject_referral
 from app.services.outbox import utcnow
-from app.services.offerings import OfferingError, organization_offerings, update_offering, add_offering
+from app.services.offerings import OfferingError, organization_offerings, update_offering, add_offering, OFFERING_SORTS
 from app.services.organization_profiles import OrganizationProfileError, organization_profile, update_organization_profile
 from app.services.password_sessions import password_identity
 
 organization_bp = Blueprint('organization', __name__)
 COOKIE = 'careconnect_organization'
 STATUSES = {'sent':'Assigned','accepted':'Accepted','attended':'Accepted',
-            'rejected':'Rejected','timed_out':'Expired','completed':'Completed'}
+            'rejected':'Declined','timed_out':'Expired','completed':'Completed'}
+REFERRAL_SORTS = {
+    'newest': ('Newest first', 'r.referral_id DESC'),
+    'oldest': ('Oldest first', 'r.referral_id ASC'),
+    'deadline': ('Response due: earliest first', 'r.response_deadline ASC,r.referral_id ASC'),
+    'service': ('Service: A to Z', 's.name ASC,r.referral_id DESC'),
+    'service_desc': ('Service: Z to A', 's.name DESC,r.referral_id DESC'),
+}
 
 
 def representative(database, *, uid=None, user_id=None):
     selector = 'u.firebase_uid=:id' if uid is not None else 'u.user_id=:id'
     row = database.execute(text('''
-        SELECT u.user_id,rep.organization_id,o.name AS org_name,o.status AS raw_status
+        SELECT u.user_id,rep.organization_id,o.name AS org_name,o.status AS raw_status,
+               (SELECT a.status FROM organization_applications a WHERE a.organization_id=o.organization_id
+                ORDER BY a.application_id DESC LIMIT 1) AS application_status
         FROM users u JOIN roles role ON role.role_id=u.role_id
         JOIN organization_representatives rep ON rep.user_id=u.user_id
         JOIN organizations o ON o.organization_id=rep.organization_id
         WHERE ''' + selector + ''' AND u.is_active=TRUE AND role.role_name='representative'
     '''), {'id':uid if uid is not None else user_id}).mappings().one_or_none()
-    return dict(row,status=row['raw_status'].title()) if row else None
+    return dict(row,status='Rejected' if row['raw_status']=='pending' and row['application_status']=='rejected'
+                else row['raw_status'].title()) if row else None
 
 
 @organization_bp.post('/api/auth/organization-session')
@@ -57,7 +68,7 @@ def establish_session():
     session['organization_csrf']=secrets.token_urlsafe(32)
     response=jsonify(redirect_url='/organization')
     response.set_cookie(COOKIE,cookie,max_age=SESSION_SECONDS,httponly=True,
-                        secure=request.is_secure,samesite='Lax',path='/')
+                        secure=current_app.config['HOSTED_MODE'] or request.is_secure,samesite='Lax',path='/')
     response.delete_cookie('careconnect_member',path='/')
     response.delete_cookie('careconnect_coordinator',path='/')
     return response
@@ -88,6 +99,9 @@ def load_organization():
                 return redirect('/login')
     if protected and g.organization is None:
         return redirect('/login')
+    if (g.organization and g.organization['raw_status']=='pending'
+            and request.path.startswith('/organization/requests')):
+        abort(403,description='Coordinator approval is required before viewing referrals.')
 
 
 def private_response(response):
@@ -98,11 +112,21 @@ def private_response(response):
     return response
 
 
-def rows(database,request_id=None):
+def rows(database,request_id=None,*,pagination=None,status='',incoming=False,limit=5):
     filters='r.organization_id=:org'
     if request_id is not None:
         filters+=' AND sr.request_id=:request'
-    records=database.execute(text('''
+    params={'org':g.organization['organization_id'],'request':request_id,'now':utcnow()}
+    if incoming:
+        filters+=" AND r.status='sent' AND sr.status='matched'"
+    if status == 'Cancelled':
+        filters+=" AND sr.status='cancelled'"
+    elif status:
+        keys=[key for key,value in STATUSES.items() if value==status]
+        # Values come only from the server-owned status mapping.
+        filters+=" AND sr.status<>'cancelled' AND r.status IN ("+','.join(f':state{i}' for i in range(len(keys)))+")" if keys else ' AND 1=0'
+        params.update({f'state{i}':key for i,key in enumerate(keys)})
+    sql='''
         SELECT r.referral_id,r.request_id,r.status AS raw_status,r.response_deadline,
                (r.response_deadline <= :now) AS is_overdue,
                sr.status AS request_status,sr.created_at,sr.description AS details,
@@ -111,8 +135,11 @@ def rows(database,request_id=None):
         FROM referrals r JOIN service_requests sr ON sr.request_id=r.request_id
         JOIN services s ON s.service_id=sr.service_id
         JOIN priority_levels p ON p.priority_id=sr.priority_id
-        WHERE '''+filters+''' ORDER BY r.referral_id DESC
-    '''),{'org':g.organization['organization_id'],'request':request_id,'now':utcnow()}).mappings().all()
+        WHERE '''+filters
+    if pagination:
+        records=page_rows(database,sql,params,pagination)
+    else:
+        records=database.execute(text(sql+' ORDER BY r.referral_id DESC LIMIT :limit'),dict(params,limit=limit)).mappings().all()
     from app.services.guest_requests import DELIVERY
     return [dict(row,reference=f"CC-{row['request_id']}",
                  status='Cancelled' if row['request_status']=='cancelled' else STATUSES[row['raw_status']],
@@ -130,25 +157,35 @@ def notifications(database):
 @organization_bp.get('/organization')
 def dashboard():
     from app.frontend import render_team
+    if g.organization['raw_status']=='pending':
+        with Session(db.engine) as database:
+            notes=notifications(database)
+        return render_team('organization/dashboard.html',org=g.organization,
+                           counts=dict(incoming=0,active=0,completed=0,services=0),requests=[],notifications=notes)
     with Session(db.engine) as database:
-        requests=rows(database)
+        requests=rows(database,incoming=True)
+        totals=database.execute(text('''SELECT
+            COALESCE(SUM(CASE WHEN r.status='sent' AND sr.status='matched' THEN 1 ELSE 0 END),0) AS incoming,
+            COALESCE(SUM(CASE WHEN r.status IN ('accepted','attended') AND sr.status<>'cancelled' THEN 1 ELSE 0 END),0) AS active,
+            COALESCE(SUM(CASE WHEN r.status='completed' THEN 1 ELSE 0 END),0) AS completed
+            FROM referrals r JOIN service_requests sr ON sr.request_id=r.request_id WHERE r.organization_id=:org'''),
+            {'org':g.organization['organization_id']}).mappings().one()
         services=database.execute(text('SELECT COUNT(DISTINCT service_id) FROM organization_services WHERE organization_id=:org'),
                                   {'org':g.organization['organization_id']}).scalar_one()
         notes=notifications(database)
-    incoming=[row for row in requests if row['raw_status']=='sent' and row['request_status']=='matched']
-    counts=dict(incoming=len(incoming),active=sum(row['raw_status'] in {'accepted','attended'} for row in requests),
-                completed=sum(row['raw_status']=='completed' for row in requests),services=services)
-    return render_team('organization/dashboard.html',org=g.organization,counts=counts,requests=incoming[:5],notifications=notes)
+    counts=dict(totals,services=services)
+    return render_team('organization/dashboard.html',org=g.organization,counts=counts,requests=requests,notifications=notes)
 
 
 @organization_bp.get('/organization/requests')
 def requests_page():
     from app.frontend import render_team
     selected=request.args.get('status','')
+    pagination=Pagination.from_request(REFERRAL_SORTS)
     with Session(db.engine) as database:
-        requests=rows(database)
+        requests=rows(database,pagination=pagination,status=selected)
         notes=notifications(database)
-    return render_team('organization/requests.html',requests=[row for row in requests if not selected or row['status']==selected],
+    return render_team('organization/requests.html',requests=requests,pagination=pagination,
                        selected_status=selected,org_active=g.organization['raw_status']=='approved',
                        organization_csrf=session['organization_csrf'],notifications=notes)
 
@@ -156,6 +193,7 @@ def requests_page():
 def render_organization_profile(profile,notes,error=None,status=200):
     from app.frontend import render_team,firebase_web_config
     values=dict(profile)
+    values['status']=g.organization['status']
     if request.method=='POST':
         for key in ('contact_name','phone','address','city'):
             values[key]=request.form.get(key,values[key])
@@ -216,8 +254,11 @@ def profile_page():
 def render_services(error=None,status=200):
     from app.frontend import render_team
     from app.services.guest_requests import DELIVERY
+    pagination=Pagination.from_request(OFFERING_SORTS,'name',endpoint='organization.services_page')
+    search=search_term()
+    selected_status=request.args.get('status','')
     with Session(db.engine) as database:
-        offerings=organization_offerings(database,g.organization['organization_id'])
+        offerings=organization_offerings(database,g.organization['organization_id'],pagination=pagination,search=search,status=selected_status)
         categories=database.execute(text('SELECT name FROM service_categories ORDER BY name')).scalars().all()
         catalog=database.execute(text('''SELECT s.service_id,s.name,s.description,s.delivery_mode,c.name AS category
             FROM services s JOIN service_categories c ON c.category_id=s.category_id
@@ -225,9 +266,15 @@ def render_services(error=None,status=200):
         areas=database.execute(text('''SELECT area_id,region_name,city FROM service_areas
             WHERE is_active=TRUE ORDER BY city,region_name,area_id''')).mappings().all()
         notes=notifications(database)
-    return render_team('organization/services.html',services=offerings,categories=categories,
+    return render_team('organization/services.html',services=offerings,categories=categories,pagination=pagination,
+                       search=search,selected_status=selected_status,
                        delivery_methods=list(DELIVERY.values()),organization_csrf=session['organization_csrf'],
                        form_error=error,notifications=notes,catalog=catalog,areas=areas),status
+
+
+def service_list_url():
+    listing=Pagination.from_request(OFFERING_SORTS,'name',endpoint='organization.services_page')
+    return listing.url(listing.page)
 
 
 @organization_bp.post('/organization/services/add')
@@ -236,6 +283,7 @@ def add_service():
         abort(403)
     if not csrf_valid('organization_csrf',request.form.get('csrf_token')):
         abort(403)
+    return_url=service_list_url()
     allowed={'csrf_token','service_id','service_area_id','status','max_referrals'}
     if (set(request.form)-allowed or
             any(len(request.form.getlist(key))!=1 for key in request.form)):
@@ -261,7 +309,7 @@ def add_service():
         current_app.logger.error('Add service transaction failed')
         return render_services('Could not add the service. Please retry.',503)
     flash('Service already added.' if result['already_processed'] else 'Service added.','success')
-    return redirect(url_for('organization.services_page'),code=303)
+    return redirect(return_url,code=303)
 
 
 @organization_bp.route('/organization/services',methods=['GET','POST'])
@@ -306,6 +354,7 @@ def service_availability(offering_id):
 
 
 def save_offering(offering_id,target,version,**settings):
+    return_url=service_list_url()
     try:
         with Session(db.engine) as database:
             update_offering(database,offering_id,g.organization['user_id'],status=target,
@@ -318,12 +367,13 @@ def save_offering(offering_id,target,version,**settings):
         current_app.logger.error('Organization offering transaction failed')
         return render_services('Could not save service settings. Please retry.',503)
     flash('Service settings saved.','success')
-    return redirect(url_for('organization.services_page'),code=303)
+    return redirect(return_url,code=303)
 
 
 @organization_bp.get('/organization/requests/<int:request_id>')
 def details(request_id):
     from app.frontend import render_team
+    listing=Pagination.from_request(REFERRAL_SORTS,endpoint='organization.requests_page')
     with Session(db.engine) as database:
         requests=rows(database,request_id)
         if not requests:
@@ -343,6 +393,7 @@ def details(request_id):
                 record.update(contact,contact_name=(contact['first_name']+' '+contact['last_name']).strip())
         notes=notifications(database)
     return render_team('organization/request_details.html',req=record,
+                       back_url=listing.url(listing.page),list_query=listing.current_query,
                        org_active=g.organization['raw_status']=='approved',
                        organization_csrf=session['organization_csrf'],notifications=notes)
 
@@ -351,6 +402,7 @@ def details(request_id):
 def act(request_id):
     if not csrf_valid('organization_csrf',request.form.get('csrf_token')):
         abort(403)
+    listing=Pagination.from_request(REFERRAL_SORTS,endpoint='organization.requests_page')
     try:
         referral_id=int(request.form.get('referral_id',''))
     except (ValueError,TypeError):
@@ -360,8 +412,8 @@ def act(request_id):
         abort(400)
     reason=request.form.get('reason','').strip()
     if action=='reject' and not 1<=len(reason)<=255:
-        flash('Enter a rejection reason containing 1 to 255 characters.','error')
-        return redirect(url_for('organization.details',request_id=request_id),code=303)
+        flash('Enter a reason for declining containing 1 to 255 characters.','error')
+        return redirect(url_for('organization.details',request_id=request_id,**listing.current_query),code=303)
     try:
         with Session(db.engine) as database:
             owned=database.execute(text('''SELECT referral_id FROM referrals WHERE referral_id=:referral
@@ -388,7 +440,7 @@ def act(request_id):
     except SQLAlchemyError:
         current_app.logger.error('Organization referral update failed')
         flash('Could not save this update. Please retry.','error')
-    return redirect(url_for('organization.details',request_id=request_id),code=303)
+    return redirect(url_for('organization.details',request_id=request_id,**listing.current_query),code=303)
 
 
 @organization_bp.get('/organization/logout')

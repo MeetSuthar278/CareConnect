@@ -1,23 +1,33 @@
 """Save an authenticated member's profile without overwriting existing team data."""
 import re
 
+from functools import wraps
+
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import db
-from app.auth import roles_required
 from app.auth import InvalidToken, VerificationUnavailable, verify_token
+from app.services.member_registration import register_member
 from app.services.organization_registration import RegistrationError, application_fields, register_organization
 
 registration_bp = Blueprint('registration', __name__)
 
 
-@registration_bp.post('/api/auth/register/organization')
-def save_organization():
-    # Do not use firebase_required: it auto-provisions first-time UIDs as members.
-    # This endpoint verifies Firebase directly and creates only a pending applicant.
+def verified_registration(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        result = registration_claims()
+        if result is not None:
+            return result
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def registration_claims():
+    # Registration alone creates users; never trust client roles or flags.
     parts = request.headers.get('Authorization', '').split()
     if len(parts) != 2 or parts[0].lower() != 'bearer':
         return jsonify(error='Authentication required'), 401
@@ -33,7 +43,14 @@ def save_organization():
     if (not isinstance(uid, str) or not 1 <= len(uid) <= 128 or not uid.isascii()
             or not isinstance(email, str) or not 1 <= len(email) <= 120
             or claims.get('email_verified') is not True):
-        return jsonify(error='Verify your email before submitting your organization application.'), 403
+        return jsonify(error='Verify your email before completing registration.'), 403
+    g.registration_claims = claims
+
+
+@registration_bp.post('/api/auth/register/organization')
+@verified_registration
+def save_organization():
+    uid, email = g.registration_claims['uid'], g.registration_claims['email']
     try:
         fields = application_fields(request.get_json(silent=True))
         with Session(db.engine) as database:
@@ -55,12 +72,14 @@ def private_registration_response(response):
 
 
 @registration_bp.post('/api/auth/register/profile')
-@roles_required('member')
+@verified_registration
 def save_profile():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify(error='JSON object required'), 400
     limits = {'full_name': 101, 'phone': 25, 'address': 255, 'city': 100}
+    if set(data) != set(limits):
+        return jsonify(error='Only name, phone, address and city can be submitted.'), 400
     fields = {}
     for key, limit in limits.items():
         value = data.get(key)
@@ -75,25 +94,13 @@ def save_profile():
             or not 7 <= sum(character.isdigit() for character in fields['phone']) <= 15):
         return jsonify(error='Enter a valid phone number.'), 400
     try:
-        with Session(db.engine) as database, database.begin():
-            member = database.execute(text('''
-                SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
-                WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member' FOR UPDATE
-            '''), {'id': g.current_user.user_id}).scalar_one_or_none()
-            if member is None:
-                return jsonify(error='Member account unavailable'), 403
-            existing = database.execute(text('''
-                SELECT first_name,last_name,phone,address,city FROM member_profiles WHERE user_id=:id
-            '''), {'id': member}).mappings().one_or_none()
-            if existing is not None:
-                if any(existing[key] != value for key, value in fields.items()):
-                    return jsonify(error='A profile already exists; existing details were preserved.'), 409
-                return jsonify(status='registered', already_processed=True), 200
-            database.execute(text('''
-                INSERT INTO member_profiles(user_id,first_name,last_name,phone,address,city)
-                VALUES(:id,:first_name,:last_name,:phone,:address,:city)
-            '''), dict(fields, id=member))
-        return jsonify(status='registered', already_processed=False), 200
+        with Session(db.engine) as database:
+            result = register_member(database, g.registration_claims['uid'], g.registration_claims['email'], fields)
+        return jsonify(status='registered', **result), 200
+    except RegistrationError as error:
+        return jsonify(error=str(error)), error.status
+    except IntegrityError:
+        return jsonify(error='Account changed; retry registration with the same details.'), 409
     except SQLAlchemyError:
         current_app.logger.error('Member registration profile unavailable')
         return jsonify(error='Could not save your profile; please retry.'), 503

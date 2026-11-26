@@ -1,0 +1,162 @@
+{
+  "scope": "Read-only EXPLAIN on current small MySQL demo data; estimates only",
+  "plans": [
+    {
+      "query": "public service search",
+      "plan": [
+        {
+          "table": "c",
+          "access": "ALL",
+          "index": null,
+          "estimated_rows": 4,
+          "extra": "Using where; Using temporary; Using filesort"
+        },
+        {
+          "table": "s",
+          "access": "ref",
+          "index": "idx_services_category",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        },
+        {
+          "table": "<derived2>",
+          "access": "ref",
+          "index": "<auto_key0>",
+          "estimated_rows": 2,
+          "extra": "Using where; Using index"
+        },
+        {
+          "table": "a",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        },
+        {
+          "table": "os",
+          "access": "ref",
+          "index": "fk_org_svc_svc",
+          "estimated_rows": 3,
+          "extra": "Using where"
+        },
+        {
+          "table": "o",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        },
+        {
+          "table": "a",
+          "access": "ALL",
+          "index": null,
+          "estimated_rows": 5,
+          "extra": "Using where; Using temporary; Using filesort"
+        },
+        {
+          "table": "os",
+          "access": "ref",
+          "index": "fk_org_svc_area",
+          "estimated_rows": 5,
+          "extra": "Using where"
+        },
+        {
+          "table": "o",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        }
+      ]
+    },
+    {
+      "query": "coordinator search",
+      "plan": [
+        {
+          "table": "<derived2>",
+          "access": "ALL",
+          "index": null,
+          "estimated_rows": 39,
+          "extra": "Using filesort"
+        },
+        {
+          "table": "s",
+          "access": "ALL",
+          "index": null,
+          "estimated_rows": 7,
+          "extra": null
+        },
+        {
+          "table": "c",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": null
+        },
+        {
+          "table": "p",
+          "access": "ALL",
+          "index": null,
+          "estimated_rows": 3,
+          "extra": "Using join buffer (hash join)"
+        },
+        {
+          "table": "sr",
+          "access": "ref",
+          "index": "fk_req_service",
+          "estimated_rows": 5,
+          "extra": "Using where"
+        },
+        {
+          "table": "u",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": null
+        },
+        {
+          "table": "mp",
+          "access": "eq_ref",
+          "index": "user_id",
+          "estimated_rows": 1,
+          "extra": null
+        },
+        {
+          "table": "r",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        },
+        {
+          "table": "o",
+          "access": "eq_ref",
+          "index": "PRIMARY",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        },
+        {
+          "table": "a",
+          "access": "eq_ref",
+          "index": "request_id",
+          "estimated_rows": 1,
+          "extra": "Using index"
+        },
+        {
+          "table": "latest",
+          "access": "ref",
+          "index": "uq_request_attempt",
+          "estimated_rows": 1,
+          "extra": "Using index; Using filesort"
+        },
+        {
+          "table": "f",
+          "access": "eq_ref",
+          "index": "request_id",
+          "estimated_rows": 1,
+          "extra": "Using where"
+        }
+      ]
+    }
+  ]
+}

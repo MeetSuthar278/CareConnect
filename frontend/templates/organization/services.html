@@ -9,7 +9,15 @@
     <h1>My Services</h1>
 </div>
 
-<!-- Table of services this organization offers -->
+<form method="get" action="{{ url_for('org_services') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
+    <div><label for="service-search" class="form-label">Search services</label><input id="service-search" name="search" class="form-control" maxlength="120" value="{{ search }}"></div>
+    <div><label for="service-status" class="form-label">Status</label><select id="service-status" name="status" class="form-select">
+        <option value="">All</option>{% for state in ['Active', 'Paused'] %}<option {% if state == selected_status %}selected{% endif %}>{{ state }}</option>{% endfor %}
+    </select></div>
+    {% include 'components/list_controls.html' %}
+    <button type="submit" class="btn-outline">Apply filters</button>
+    <a href="{{ url_for('org_services') }}" class="btn-outline">Clear</a>
+</form>
 {% if services %}
     <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive mb-4">
         <table class="table">
@@ -32,7 +40,7 @@
                         <td>{{ s.area }}</td>
                         <td>{{ status_label(s.status) }}</td><td>{{ s.response_hours }} hours</td><td>{{ s.max_referrals }}</td>
                         <td>
-                            <form method="post" action="{{ url_for('org_toggle_service', offering_id=s.organization_service_id) }}">
+                            <form method="post" action="{{ url_for('org_toggle_service', offering_id=s.organization_service_id, **pagination.current_query) }}">
                                 <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
                                 <input type="hidden" name="target_status" value="{{ 'paused' if s.raw_status == 'active' else 'active' }}">
                                 <input type="hidden" name="expected_status" value="{{ s.raw_status }}">
@@ -46,7 +54,7 @@
                     <tr><td colspan="8">
                         <details {% if request.method == 'POST' and request.form.get('organization_service_id') == s.organization_service_id|string %}open{% endif %}>
                             <summary>Edit settings for {{ s.service_name }}</summary>
-                            <form method="post" action="{{ url_for('org_services') }}" class="py-3">
+                            <form method="post" action="{{ pagination.url(pagination.page) }}" class="py-3">
                                 <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
                                 <input type="hidden" name="organization_service_id" value="{{ s.organization_service_id }}">
                                 <input type="hidden" name="expected_status" value="{{ s.raw_status }}">
@@ -62,14 +70,14 @@
         </table>
     </div>
 {% else %}
-    <div class="note-box mb-4">You have not added any services yet.</div>
+    <div class="note-box mb-4">No services match this view. Clear the filters or add a service below.</div>
 {% endif %}
+{% include 'components/pagination.html' %}
 
-<!-- Add a new service -->
 <div class="box form-box-wide" style="margin-left:0;">
     <h3 class="mb-3">Add a service</h3>
 
-    <form id="add-service-form" method="post" action="{{ url_for('organization.add_service') }}">
+    <form id="add-service-form" method="post" action="{{ url_for('organization.add_service', **pagination.current_query) }}">
         <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
         {% set add_values = request.form if request.endpoint == 'organization.add_service' else {} %}
         {{ service_fields({}, categories, delivery_methods, add_values, limited=true, adding=true, catalog=catalog, areas=areas) }}

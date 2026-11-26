@@ -1,0 +1,14 @@
+{% if pagination is defined and pagination %}
+<div>
+    <label for="list-sort" class="form-label">Sort by</label>
+    <select id="list-sort" name="sort" class="form-select">
+        {% for key, label in pagination.sort_options.items() %}<option value="{{ key }}" {% if pagination.sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+</div>
+<div>
+    <label for="list-page-size" class="form-label">Records per page</label>
+    <select id="list-page-size" name="page_size" class="form-select">
+        {% for size in [10, 20, 50] %}<option value="{{ size }}" {% if pagination.page_size == size %}selected{% endif %}>{{ size }}</option>{% endfor %}
+    </select>
+</div>
+{% endif %}

@@ -2,6 +2,14 @@
 from sqlalchemy import text
 
 from app.services.outbox import utcnow
+from app.pagination import like_pattern, page_rows
+
+OFFERING_SORTS = {
+    'name': ('Service: A to Z', 's.name ASC,os.organization_service_id ASC'),
+    'name_desc': ('Service: Z to A', 's.name DESC,os.organization_service_id ASC'),
+    'newest': ('Newest first', 'os.organization_service_id DESC'),
+    'oldest': ('Oldest first', 'os.organization_service_id ASC'),
+}
 
 RESPONSE_HOURS = 2  # Existing matching response window, capped by attendance SLA.
 
@@ -39,7 +47,7 @@ def add_offering(database,user_id,*,service_id,area_id,status,referral_limit):
         priorities=database.execute(text('''SELECT priority_id,level_name FROM priority_levels
             ORDER BY priority_id FOR UPDATE''')).mappings().all()
         if {row['level_name'] for row in priorities}!={'High','Medium','Low'}:
-            raise OfferingError('Priority configuration is unavailable. Please contact the coordinator.',503)
+            raise OfferingError('Time-frame settings are unavailable. Please contact the coordinator.',503)
         priority_ids={row['priority_id'] for row in priorities}
         if service is None or area is None:
             raise OfferingError('Selected service or area is unavailable. Reload and retry.',400)
@@ -66,8 +74,8 @@ def add_offering(database,user_id,*,service_id,area_id,status,referral_limit):
         return dict(organization_service_id=offering_id,already_processed=False)
 
 
-def organization_offerings(database,organization_id):
-    rows=database.execute(text('''
+def organization_offerings(database,organization_id,*,pagination,search='',status=''):
+    sql='''
         SELECT os.organization_service_id,os.service_id,os.status AS raw_status,
                os.active_referral_limit AS max_referrals,os.current_active_referrals,
                s.name AS service_name,s.description,s.delivery_mode,c.name AS category,
@@ -77,8 +85,16 @@ def organization_offerings(database,organization_id):
         FROM organization_services os JOIN services s ON s.service_id=os.service_id
         JOIN service_categories c ON c.category_id=s.category_id
         JOIN service_areas a ON a.area_id=os.service_area_id
-        WHERE os.organization_id=:org ORDER BY os.organization_service_id
-    '''),{'org':organization_id}).mappings().all()
+        WHERE os.organization_id=:org
+    '''
+    params={'org':organization_id}
+    if search:
+        sql+=" AND (LOWER(s.name) LIKE :search ESCAPE '!' OR LOWER(c.name) LIKE :search ESCAPE '!')"
+        params['search']=like_pattern(search)
+    if status:
+        sql+=' AND os.status=:status'
+        params['status']={'Active':'active','Paused':'paused'}.get(status,'')
+    rows=page_rows(database,sql,params,pagination)
     from app.services.guest_requests import DELIVERY
     return [dict(row,status=row['raw_status'].title(),area=f"{row['region_name']}, {row['city']}",
                  response_hours=RESPONSE_HOURS,eligibility='-',availability='-',

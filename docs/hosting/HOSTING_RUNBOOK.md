@@ -1,30 +1,20 @@
-# CareConnect: prepare one Ubuntu VM, deploy only after review
+# Hosting runbook
 
-Prepared November 3, 2026 while Azure student benefits are pending. This is a deployment
-candidate, not a tested running hosted service. Application tests are recorded in
-[REMAINING_FEATURES_TEST_GUIDE.md](../testing/REMAINING_FEATURES_TEST_GUIDE.md).
+The configuration targets a single Linux VM with MySQL, RabbitMQ, Flask/Gunicorn,
+and Caddy. All source paths required by `Dockerfile.hosting` are present, and
+worker imports and Compose configuration checks pass. The final local image build,
+Gunicorn/MySQL read-only smoke and disposable real MySQL/RabbitMQ worker tests passed.
+The full Linux Compose stack, public DNS/TLS and production email flows remain untested.
+Review the [deployment test report](../testing/DEPLOYMENT_TEST_REPORT.md) before
+provisioning or launching. No public deployment is claimed.
 
-### User build follow-up
-
-The user's Docker build reached dependency installation and failed because the
-original hosting manifest pinned Gunicorn 26.2.2, which the package index did not
-provide. The pin is corrected to 26.2.0, which the build's available-version list
-and [PyPI release files](https://pypi.org/project/gunicorn/26.2.0/) both confirm.
-That release requires Python >=3.10 and lists Python 3.12 support. The user completed
-the Compose-validation step without reporting an error. The user subsequently
-reported the corrected image build completed without error. Its isolated
-`--network none` import check printed `Container imports OK`, and an isolated
-HOSTED_MODE Flask factory check with SQLite in memory returned `Health: 200`.
-These establish basic image/import/app-startup checks, not full hosted integration.
-The user also reported the local coordinator Reports smoke check completed.
-
-## New files and isolation
+## Configuration
 
 - `compose.hosting.yml`: separate project `careconnect-hosted`, separate named volumes.
 - `Dockerfile.hosting`: explicit runtime COPY paths, Linux Python, non-root UID 10001,
-  Gunicorn. Existing empty Dockerfile/local Compose are untouched.
+  Gunicorn. Local infrastructure uses `docker-compose.yml`.
 - `requirements-hosting.txt`: original Python manifest plus Linux Gunicorn.
-- `.dockerignore`: excludes environments, backups, teammate copies and private keys.
+- `.dockerignore`: excludes environments, backups, review files, and private keys.
 - `deploy/hosting.env.example`: placeholder-only private configuration template.
 - `deploy/Caddyfile`: HTTPS proxy to private web:8000.
 - `deploy/check_schema.py`: read-only schema and uniqueness/capacity preflight.
@@ -36,7 +26,7 @@ directly while trusting forwarded headers. MySQL, RabbitMQ and management UI rem
 on the Docker network without public ports. Hosted mode blocks legacy demo request
 access even if testing/debug would otherwise allow it. Existing local behavior is kept.
 
-## Checks available now, without starting a database
+## Configuration and build checks
 
 Run in a terminal where Docker Desktop/Compose is available, from the project root:
 
@@ -47,19 +37,15 @@ docker build -f Dockerfile.hosting -t careconnect-hosted:local .
 
 The first validates Compose without printing private resolved environment values.
 The second builds only an image; it does not start workers, import SQL or change the
-current database. Neither was executable in the implementation tool terminal because
-Docker CLI was unavailable. Record actual results before calling the package ready.
+current database. Configuration validation alone does not establish a working image or deployment.
 Do not use `docker compose config` without quiet/no-interpolate with real secrets
 when collecting screenshots or sharing logs.
 
-## VM preparation after Azure is activated
+## VM preparation
 
-Use an available x86-64 Ubuntu VM with adequate memory for MySQL, RabbitMQ and Python
-processes (start planning around 4 GB, then measure). Review the portal's actual total
-estimate, including disk/public IP/network, against student credit before creating it.
-There is no assumption that 12-month credit means 12 months of this VM for free.
+Use an x86-64 Ubuntu VM with adequate memory for MySQL, RabbitMQ and Python
+processes. Review hosting, disk, public IP, and network costs before provisioning.
 Deploy only the reviewed runtime repository files, not the Windows venv or backups.
-No git mutation or remote resource creation is authorized by this document alone.
 
 Fill a private `deploy/.env.hosting` from `deploy/hosting.env.example` on the VM. Use
 fresh independent secrets, not the local development credentials. Hexadecimal random
@@ -74,17 +60,16 @@ ensure container UID 10001 can read that file; Compose permissions do not overri
 arbitrary host file permissions. Restrict the host file to that owner. Do not paste
 the JSON/private key or populated env file into chat, git or screenshots.
 
-Use the existing Firebase project matching the frontend web configuration; changing
-FIREBASE_PROJECT_ID alone does not replace the frontend config. Add the eventual
-website hostname to Firebase's authorized domains with the project owner. Confirm
-the VM's system clock is synchronized, as the local demo previously rejected tokens
-when the server clock was behind.
+Use `careconnect-bfb9e`; the frontend and backend both read FIREBASE_PROJECT_ID
+and the public web variables from the environment. Add the eventual
+website hostname to Firebase's authorized domains. Keep the VM's system clock
+synchronized for token verification and deadline processing.
 
 Point SITE_DOMAIN's DNS to the VM, permit HTTPS/HTTP for Caddy and restrict SSH to the
 administrators' addresses. Caddy can obtain a public certificate only when that DNS
 and inbound traffic work. Its data/config volumes retain certificates across restarts.
 
-## Database and launch gates — separate approval required
+## Database provisioning and launch
 
 Do not run baseline/reset scripts or migration 001 against the local or hosted database.
 Choose a reviewed current synthetic export whose schema already includes approved
@@ -92,7 +77,7 @@ workflow/Firebase changes. Restore into the NEW hosted volume only after explici
 approval and after verifying target/project/database. No SQL is automatically mounted
 under docker-entrypoint-initdb.d and the image contains no schema/seed/backup scripts.
 
-Future approved commands on the VM, from the project root:
+After environment/schema verification and deployment review, run from the project root on the VM:
 
 ```sh
 docker compose --env-file deploy/.env.hosting -f compose.hosting.yml build
@@ -112,9 +97,9 @@ After the approved restore, verify with:
 docker compose --env-file deploy/.env.hosting -f compose.hosting.yml run --rm schema_check
 ```
 
-Review imported requests/deadlines before the final start. The two hosted deadline
-processes use --apply and will perform real timeout/overdue processing. Existing
-October demo requests may be overdue; do not reset their original SLA to hide that.
+Review imported requests/deadlines before the final start. The deadline commands
+are configured with --apply; review their restored implementations for timeout and
+overdue effects. Preserve existing requests' original SLA deadlines.
 
 Only after schema, secrets, DNS, cost and deadline effects have been reviewed:
 
@@ -124,19 +109,21 @@ docker compose --env-file deploy/.env.hosting -f compose.hosting.yml ps
 docker compose --env-file deploy/.env.hosting -f compose.hosting.yml logs --tail 50 web matching notifications outbox
 ```
 
-Topology setup completes before consumers; read-only schema check completes before
-web/workers/scanners. Running services restart unless stopped; init forwards shutdown
-signals. Persistent MySQL/RabbitMQ volumes and outbox provide the existing recovery
-behavior; at-least-once notifications can retry. Back up the hosted DB regularly to
-private storage separate from its VM disk and review restore before executing it.
+Compose requires topology setup and the read-only schema check before starting
+web/workers/scanners. Services are configured to restart unless stopped; init forwards
+shutdown signals. Named volumes retain MySQL/RabbitMQ data. Outbox recovery and
+consumer retries are implemented; selected business delivery/replay paths passed
+isolated network tests. Forced broker outage/restart still needs a separate exercise.
+Back up the hosted DB to private storage separate from its VM disk and review restore
+before executing it.
 Never use `down -v`, delete volumes, or restore over an existing dataset without review.
 
 ## Completion checks and limits
 
 After an actual launch: verify HTTPS login for all SQL roles, authorized Firebase
 domain, private DB/broker ports, logs for all five consumers and outbox, both deadline
-processes and persistent data after an approved restart. Coordinate one synthetic
-request through matching/notification with the tester instead of repeating every path.
+processes and persistent data after an approved restart. Verify a synthetic
+request through matching and notification without resetting existing data.
 Do not publish admin UIs or credentials to demonstrate queues; use controlled evidence.
 
 Still unverified: live schema preflight, hosted MySQL/RabbitMQ and worker integration,
@@ -146,8 +133,23 @@ supported/patched versions before broader public use rather than silently upgrad
 the database/broker here. This is a single-VM university demo, with no multi-host HA,
 DLQ/bounded consumer retries or disaster-recovery guarantee.
 
-Reference behavior: [Flask proxy configuration](https://flask.palletsprojects.com/en/stable/deploying/proxy_fix/),
+Configuration references: [Flask proxy configuration](https://flask.palletsprojects.com/en/stable/deploying/proxy_fix/),
 [Compose dependency conditions](https://docs.docker.com/compose/how-tos/startup-order/),
-[Caddy automatic HTTPS](https://caddyserver.com/docs/automatic-https), and
-[Gunicorn package release](https://pypi.org/project/gunicorn/26.2.0/). These support the configuration design;
+[Caddy automatic HTTPS](https://caddyserver.com/docs/automatic-https). These support the configuration design;
 they do not establish a successful build or deployment of this project.
+
+
+## Submission checks
+
+Run `python tools/check_submission_readiness.py` for imports, template compilation,
+source paths and project-ID consistency. With services running, explicitly add
+`--database --rabbitmq` for read-only schema/mapping counts and passive topology
+checks. Review verification email delivery and all SQL roles using the manual
+checklist before any public launch. Firebase Console policy/domain/template setup
+and any UID migration need separate verification or approval. The deleted root
+`Dockerfile` is unused by both Compose configurations; hosting explicitly selects
+`Dockerfile.hosting`, so restoring the obsolete file is unnecessary.
+
+The normalized release requires the referral flag to be absent. Restore a fresh
+normalized schema or follow the [migration 003 runbook](../database/REFERRAL_MIGRATION_RUNBOOK.md)
+for a reviewed legacy copy before enabling hosted workers.

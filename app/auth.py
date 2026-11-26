@@ -104,10 +104,12 @@ def resolve_identity(claims):
     """Requires team migration; raw SQL avoids changing existing ORM queries.
 
     Never link existing accounts by email or take roles from request/token claims.
-    A first-time Firebase identity may create only a member account. Members do
-    not require verified email; privileged SQL roles still do.
+    Registration owns account creation. A preliminary Firebase identity cannot
+    create SQL users or acquire permissions by signing in.
     """
     uid, email = claims["uid"], claims["email"]
+    if claims.get('email_verified') is not True:
+        return None, ("Verify your email before accessing CareConnect", 403)
     with Session(db.engine) as session, session.begin():
         user = session.execute(text("""
             SELECT u.user_id, u.email, u.is_active, r.role_name
@@ -118,22 +120,17 @@ def resolve_identity(claims):
             if session.execute(text("SELECT user_id FROM users WHERE email = :email"),
                                {"email": email}).first():
                 return None, ("Account already exists; administrator linking is required", 409)
-            role_id = session.execute(text(
-                "SELECT role_id FROM roles WHERE role_name = 'member'"
-            )).scalar_one_or_none()
-            if role_id is None:
-                return None, ("Member role is missing", 503)
-            result = session.execute(text("""
-                INSERT INTO users (role_id, email, firebase_uid, password_hash, is_active)
-                VALUES (:role, :email, :uid, NULL, TRUE)
-            """), {"role": role_id, "email": email, "uid": uid})
-            return Identity(result.lastrowid, email, "member"), None
+            return None, ("Finish registration before signing in.", 409, 'registration-required')
         if not user["is_active"]:
             return None, ("Account is inactive", 403)
         if user["role_name"] not in {"member", "representative", "coordinator"}:
             return None, ("Account role is not supported", 403)
-        if user["role_name"] != "member" and claims.get("email_verified") is not True:
-            return None, ("Verify your email before accessing CareConnect", 403)
+        if user['email'] != email:
+            return None, ("Account email changed; contact the project administrator.", 409)
+        if user['role_name'] == 'member' and session.execute(text(
+                'SELECT user_id FROM member_profiles WHERE user_id=:id'),
+                {'id': user['user_id']}).first() is None:
+            return None, ("Finish individual registration before signing in.", 409, 'registration-required')
         organization_id = None
         if user["role_name"] == "representative":
             organization_id = session.execute(text("""
@@ -163,6 +160,8 @@ def firebase_required(view):
         if (not isinstance(uid, str) or not 1 <= len(uid) <= 128 or not uid.isascii()
                 or not isinstance(email, str) or not 1 <= len(email) <= 120):
             return jsonify(error="A valid email account is required"), 403
+        if claims.get('email_verified') is not True:
+            return jsonify(error='Verify your email before accessing CareConnect', code='email-unverified'), 403
         g.firebase_claims = claims
         try:
             identity, error = resolve_identity(claims)
@@ -172,9 +171,10 @@ def firebase_required(view):
             current_app.logger.error("Authentication database unavailable; check schema and connection")
             return jsonify(error="Account service unavailable"), 503
         if error:
-            return jsonify(error=error[0]), error[1]
-        if identity.role != "member" and claims.get("email_verified") is not True:
-            return jsonify(error="Verify your email before accessing CareConnect"), 403
+            body = {'error': error[0]}
+            if len(error) > 2:
+                body['code'] = error[2]
+            return jsonify(body), error[1]
         g.current_user = identity
         return view(*args, **kwargs)
     return wrapped

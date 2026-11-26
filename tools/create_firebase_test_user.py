@@ -12,17 +12,19 @@ passwords. Open the received verification email before using /login.
 REST reference: https://firebase.google.com/docs/reference/rest/auth
 """
 import argparse
+import os
+from dotenv import load_dotenv
 import getpass
 import json
-import os
+import re
 import sys
 import urllib.error
 import urllib.request
 from urllib.parse import urlencode
 
-
+load_dotenv()
 # Public web configuration, matching the team's reviewed frontend. Not an Admin key.
-PROJECT_ID = "careconnect-7132c"
+PROJECT_ID = os.environ["FIREBASE_PROJECT_ID"]
 WEB_API_KEY = os.environ["FIREBASE_WEB_API_KEY"]
 BASE_URL = "https://identitytoolkit.googleapis.com/v1/accounts:"
 
@@ -31,12 +33,36 @@ class SetupError(Exception):
     """A sanitized message safe to show without credential/token contents."""
 
 
+# Keep these rules in sync with frontend/static/js/registration-password.js.
+# Firebase's supported special characters; whitespace is not special.
+SPECIAL_CHARACTERS = "^$*.[]{}()?\"!@#%&/\\,><':;|_~`-"
+PASSWORD_REQUIREMENTS = (
+    "Use at least 8 characters, including an uppercase letter (A–Z) "
+    "and a special character (for example, @, #, $, ! or %)."
+)
+
+
+def validate_new_password(password, confirmation):
+    if not password:
+        raise SetupError("Password cannot be empty. Nothing was sent.")
+    if (len(password) < 8 or not re.search(r"[A-Z]", password)
+            or not any(character in SPECIAL_CHARACTERS for character in password)):
+        raise SetupError(PASSWORD_REQUIREMENTS + " Nothing was sent.")
+    if not confirmation:
+        raise SetupError("Confirm your password. Nothing was sent.")
+    if password != confirmation:
+        raise SetupError("Passwords do not match. Nothing was sent.")
+
+
 ERRORS = {
     "EMAIL_EXISTS": "This account already exists. No account or password was changed. "
                     "Use --resend-verification only if you own it and know its password.",
     "INVALID_EMAIL": "Enter a valid test email address.",
-    "WEAK_PASSWORD": "Firebase rejected the password. Choose a stronger password.",
-    "PASSWORD_DOES_NOT_MEET_REQUIREMENTS": "The password does not meet the project's password policy.",
+    "WEAK_PASSWORD": "Firebase rejected the password. " + PASSWORD_REQUIREMENTS,
+    "PASSWORD_DOES_NOT_MEET_REQUIREMENTS": (
+        "Firebase rejected the password. " + PASSWORD_REQUIREMENTS +
+        " If it already meets these requirements, ask the project administrator to check the password policy."
+    ),
     "OPERATION_NOT_ALLOWED": "Email/password authentication must be enabled in Firebase.",
     "TOO_MANY_ATTEMPTS_TRY_LATER": "Firebase rate-limited this action. Wait before trying again.",
     "INVALID_LOGIN_CREDENTIALS": "Email or password is incorrect.",
@@ -98,10 +124,7 @@ def main(argv=None):
             raise SetupError("Password cannot be empty.")
         if not options.resend_verification:
             confirmation = getpass.getpass("Confirm password (hidden): ")
-            if password != confirmation:
-                raise SetupError("Passwords do not match. Nothing was sent.")
-            if len(password) < 6:
-                raise SetupError("Use at least six characters, or more if required by Firebase policy.")
+            validate_new_password(password, confirmation)
         operation = "RESEND" if options.resend_verification else "CREATE"
         print("This will " + ("sign in and request a verification email for "
               if options.resend_verification else "create a Firebase account and request a verification email for ") + email)
@@ -117,8 +140,8 @@ def main(argv=None):
             raise SetupError("Firebase did not return a verification token. Check the account before retrying.")
         post("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": token})
         print("Verification email requested. Check your inbox and spam folder, then open the verification link.")
-        print("After verification, sign in at http://127.0.0.1:5000/login using the same email and password.")
-        print("The first successful CareConnect login may create a member row; this script does not.")
+        print("After verification, finish registration at http://127.0.0.1:5000/register/verify using the same email and password.")
+        print("Then log in at http://127.0.0.1:5000/login. This script does not create MySQL records.")
         return 0
     except SetupError as error:
         print("Setup stopped:", error)

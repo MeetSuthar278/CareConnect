@@ -13,6 +13,13 @@ DELIVERY = {"in-person": "In person", "phone": "Phone", "online": "Online"}
 DISPLAY_STATUS = {"submitted": "Pending", "matched": "Assigned", "unmatched": "Unmatched",
                   "in_progress": "In progress", "completed": "Completed", "cancelled": "Cancelled"}
 
+# Preserve the form's one-distinct-area rule with one grouped query.
+ELIGIBLE_AREAS = '''SELECT os.service_id,MIN(a.area_id) AS area_id
+    FROM organization_services os JOIN organizations o ON o.organization_id=os.organization_id
+    JOIN service_areas a ON a.area_id=os.service_area_id
+    WHERE os.status='active' AND o.status='approved' AND a.is_active=TRUE
+    GROUP BY os.service_id HAVING COUNT(DISTINCT a.area_id)=1'''
+
 
 class GuestRequestError(Exception):
     def __init__(self, message, status=400):
@@ -22,18 +29,16 @@ class GuestRequestError(Exception):
 
 def service_choices(session):
     services = session.execute(text("""
-        SELECT s.service_id,s.name AS service_name,c.name AS category,s.delivery_mode
+        SELECT s.service_id,s.name AS service_name,c.name AS category,s.delivery_mode,a.region_name,a.city
         FROM services s JOIN service_categories c ON c.category_id=s.category_id
-        WHERE s.is_active=TRUE AND c.is_active=TRUE ORDER BY s.service_id
+        JOIN (""" + ELIGIBLE_AREAS + """) eligible ON eligible.service_id=s.service_id
+        JOIN service_areas a ON a.area_id=eligible.area_id
+        WHERE s.is_active=TRUE AND c.is_active=TRUE
+          AND s.delivery_mode IN ('in-person','phone','online') ORDER BY s.service_id
     """)).mappings().all()
     result = []
     for row in services:
-        areas = _areas(session, row["service_id"])
-        if len(areas) != 1 or row["delivery_mode"] not in DELIVERY:
-            # No area selector exists in this team design. Do not guess an area.
-            continue
-        area = areas[0]
-        result.append(dict(row, area=f"{area.region_name}, {area.city}",
+        result.append(dict(row, area=f"{row['region_name']}, {row['city']}",
                            delivery_methods=[DELIVERY[row["delivery_mode"]]]))
     return result
 

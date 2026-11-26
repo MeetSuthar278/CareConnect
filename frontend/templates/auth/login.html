@@ -4,13 +4,15 @@
 
 {% block content %}
 
-<div class="form-box">
+<div id="auth-entry" class="form-box">
 
     <h1 class="mb-4">Log in</h1>
+    {% if request.args.get('registered') in ['individual', 'organization', 'verified'] %}
+    <p class="note-box" role="status">Your email is verified. {% if request.args.get('registered') == 'organization' %}Your organization application is awaiting coordinator approval. {% endif %}You can now log in.</p>
+    {% endif %}
 
     <div class="box">
-        {# method="post" sends the form to Flask. Flask checks the email and password,
-           finds the role (individual / organization / coordinator) and opens the right dashboard #}
+
         <form id="login-form" method="post" action="{{ url_for('login') }}">
 
             <div class="mb-3">
@@ -26,22 +28,27 @@
 
             <button type="submit" class="btn-main w-100">Log In</button>
         </form>
+        <button id="password-reset" type="button" class="btn btn-link px-0 mt-2"
+                aria-describedby="password-reset-help">Forgot your password?</button>
+        <p id="password-reset-help" class="text-muted small mb-0">Enter your email above to request a password reset link.</p>
     </div>
 
     <p class="mt-3 mb-1">
         New here? <a href="{{ url_for('signup') }}">Create an account</a>
     </p>
+    <p><a href="{{ url_for('verify_email') }}">Finish registration or resend a verification email</a></p>
     <p class="mb-3">
         Just want to ask for help? <a href="{{ url_for('request_form') }}">Continue as Guest</a>
     </p>
 
-
 </div>
 
+{% include 'auth/_verification_panel.html' %}
 {% endblock %}
 
 {% block scripts %}
 <script id="firebase-web-config" type="application/json">{{ firebase_web_config | tojson }}</script>
 <script id="login-csrf" type="application/json">{{ login_csrf | tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/login.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/password-reset.js') }}"></script>
 {% endblock %}

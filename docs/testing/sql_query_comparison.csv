@@ -1,0 +1,457 @@
+﻿HEAD query number,HEAD query name,Comparison,HEAD source,HEAD SQL or equivalent,Current query candidates,Interpretation,Current query fingerprints
+Q042,"resolve identity: SELECT users, roles",Same normalized query family retained,app/auth.py:112 (resolve_identity); app/services/organization_registration.py:33 (register_organization),"
+            SELECT u.user_id, u.email, u.is_active, r.role_name
+            FROM users u JOIN roles r ON r.role_id = u.role_id
+            WHERE u.firebase_uid = :uid
+        ",Q101,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,07195524b730320b8345a9b22c90b51eed7c9a84abd4668ca72c9d17f9ff977d
+Q043,resolve identity: SELECT users,Same normalized query family retained,app/auth.py:118 (resolve_identity); app/services/guest_requests.py:118 (create_guest_request); app/services/organization_registration.py:57 (register_organization),SELECT user_id FROM users WHERE email = :email,Q102,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,0a033685fc2081040dc6bf2b5c758893a95ed9ad86e51b597e870e0fcaa44106
+Q044,resolve identity: SELECT roles,Same normalized query family retained,app/auth.py:121 (resolve_identity); app/services/guest_requests.py:121 (create_guest_request); app/services/organization_registration.py:62 (register_organization),SELECT role_id FROM roles WHERE role_name = 'member',Q173,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,7bbeabfc0993dc45f640af56a02e46f6a84eba1adb941feb3bbd83bdffe01dc3
+Q045,resolve identity: INSERT users,Same normalized query family retained,app/auth.py:126 (resolve_identity); app/services/organization_registration.py:65 (register_organization),"
+                INSERT INTO users (role_id, email, firebase_uid, password_hash, is_active)
+                VALUES (:role, :email, :uid, NULL, TRUE)
+            ",Q189,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,23627601043a94ab526ec3414c9902ecf168b7bd417180c4ac5fbcd4395ffc6f
+Q046,resolve identity: SELECT organization_representatives,Same normalized query family retained,app/auth.py:139 (resolve_identity),"
+                SELECT organization_id FROM organization_representatives
+                WHERE user_id = :id
+            ",Q104,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,804fe9867f6d06630283923e1851b231f451207c210af995febef9b91b50f1a6
+Q047,get services: SELECT,Same normalized query family retained,app/catalog.py:12 (get_services),db.session.query(Service).filter_by(is_active=True).order_by(Service.service_id).all(),Q105,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c59abf531e8a933b18f07d2feb6cc935eec24c773f63084b4963a72752796a84
+Q048,get areas: SELECT,Same normalized query family retained,app/catalog.py:27 (get_areas),db.session.query(ServiceArea).filter_by(is_active=True).order_by(ServiceArea.area_id).all(),Q106,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,041fdc71fe59ebe029d085284c39a5325b5450fa7608dc72706414fc4b61755c
+Q049,get priorities: SELECT,Same normalized query family retained,app/catalog.py:46 (get_priorities),db.session.query(PriorityLevel).order_by(PriorityLevel.priority_id).all(),Q107,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,555f3d4431f3c3b952ad04d892695b5caf1bbc20b7c9768f69d4f7da878b02db
+Q050,"coordinator identity: SELECT users, roles",Same normalized query family retained,app/coordinator.py:26 (coordinator_identity),"SELECT u.user_id FROM users u
+        JOIN roles r ON r.role_id=u.role_id WHERE {'u.firebase_uid=:id' if uid is not None else 'u.user_id=:id'}
+        AND u.is_active=TRUE AND r.role_name='coordinator'
+    ",Q108,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d1d1bae3d75359a044be8903e734f30d769f3d1a8932067d1b268435d759694c
+Q051,"request rows: SELECT feedback, service_requests, services, service_categories, priority_levels, users, member_profiles, referrals, organizations, attendance_records",Modified template with source-reviewed feature preservation,app/coordinator.py:96 (request_rows),"
+        SELECT sr.request_id,sr.status AS raw_status,sr.created_at,sr.description AS details,
+               sr.attendance_deadline,s.name AS service_name,s.delivery_mode,c.name AS category,
+               p.level_name AS priority,p.deadline_hours AS priority_hours,
+               r.response_deadline,r.status AS referral_status,r.organization_id AS org_id,o.name AS org_name,
+               u.email AS contact_email,(u.firebase_uid IS NULL) AS is_guest,
+               mp.first_name,mp.last_name,mp.phone AS contact_phone,mp.address AS contact_address,mp.city AS contact_city,
+               (sr.attendance_deadline < :now AND a.attendance_id IS NULL
+                 AND sr.status NOT IN ('completed','cancelled')) AS overdue,
+               EXISTS(SELECT 1 FROM feedback f WHERE f.request_id=sr.request_id AND f.is_helpful=FALSE) AS negative_feedback
+        FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+        LEFT JOIN service_categories c ON c.category_id=s.category_id
+        JOIN priority_levels p ON p.priority_id=sr.priority_id
+        JOIN users u ON u.user_id=sr.member_id LEFT JOIN member_profiles mp ON mp.user_id=u.user_id
+        LEFT JOIN referrals r ON r.referral_id=(SELECT latest.referral_id FROM referrals latest
+            WHERE latest.request_id=sr.request_id ORDER BY latest.attempt_number DESC LIMIT 1)
+        LEFT JOIN organizations o ON o.organization_id=r.organization_id
+        LEFT JOIN attendance_records a ON a.request_id=sr.request_id
+        ORDER BY sr.request_id DESC
+    ",Q109,Request data remains available; SQL filters/order/limit now precede rendering.,acb4cbbab66926a433e89a827c70317da6c14336302a65a3bbff12dbbec05569
+Q052,"request rows: SELECT referral_status_history, referrals",Modified template with source-reviewed feature preservation,app/coordinator.py:116 (request_rows),"
+        SELECT r.request_id,h.new_status AS text,h.changed_at AS time
+        FROM referral_status_history h JOIN referrals r ON r.referral_id=h.referral_id
+        ORDER BY h.changed_at,h.history_id
+    ",Q110,All attempts remain in per-request history; request-scoped lookup replaces list-wide eager history.,b85137f8c57ba80b13bc0d5cb166fe58a0c94a298e77b50aa074393f5b546bbf
+Q053,notifications: SELECT notifications,Same normalized query family retained,app/coordinator.py:143 (notifications); app/member.py:146 (dashboard); app/member.py:162 (render_profile); app/organization.py:125 (notifications),"SELECT message,created_at AS time FROM notifications
+        WHERE user_id=:id AND is_read=FALSE ORDER BY notification_id DESC LIMIT 20",Q111,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,aaf2b79e72da7cc42a3a7ff0efb082dd93b4fe3432ed47528ab2477ab675543a
+Q054,"organizations page: SELECT organizations, organization_applications, member_profiles",Modified template with source-reviewed feature preservation,app/coordinator.py:177 (organizations_page),"
+            SELECT o.organization_id AS org_id,o.name AS org_name,o.status AS raw_status,
+                   o.contact_email AS email,o.contact_phone AS phone,o.address,o.city,
+                   COALESCE(a.created_at,o.created_at) AS created_at,a.status AS application_status,
+                   mp.first_name,mp.last_name
+            FROM organizations o LEFT JOIN organization_applications a ON a.application_id=(
+                SELECT latest.application_id FROM organization_applications latest
+                WHERE latest.organization_id=o.organization_id ORDER BY latest.application_id DESC LIMIT 1)
+            LEFT JOIN member_profiles mp ON mp.user_id=a.submitted_by_user_id
+            ORDER BY o.name,o.organization_id
+        ",Q114,"Organization state, including rejected application display, is filtered before pagination.",8440390640bbcc93a21b54b8549ccd01ae65e5113ceb0d3979b9f40569be3828
+Q055,"organizations page: SELECT organization_services, service_areas",Modified template with source-reviewed feature preservation,app/coordinator.py:188 (organizations_page),"
+            SELECT os.organization_id,os.service_id,sa.region_name,sa.city
+            FROM organization_services os JOIN service_areas sa ON sa.area_id=os.service_area_id
+            ORDER BY os.organization_id,sa.region_name,sa.city
+        ",Q115,Same service/area data loaded in bulk for current page organization IDs.,5efb64066524882368a8882c45c2686c645fac7bc554451e481a1fc65b6c53cc
+Q056,"organizations page: SELECT organization_representatives, users, roles",Modified template with source-reviewed feature preservation,app/coordinator.py:193 (organizations_page),"
+            SELECT rep.organization_id,rep.full_name FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE u.is_active=TRUE AND r.role_name='representative'
+            ORDER BY rep.organization_id,rep.is_primary_contact DESC,rep.user_id
+        ",Q116,Same representative/contact data loaded in bulk for current page organization IDs.,d8d7e8c30aaa1c08f6ebdf27c24c92e46064e898500951105b5cb351b80b12e2
+Q057,requests page: SELECT organizations,Same normalized query family retained,app/coordinator.py:273 (requests_page),"SELECT organization_id AS org_id,name AS org_name FROM organizations ORDER BY name",Q117,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,1188df349175e8611f24d582ae598a2980c7b4feb177629712dffd4adeca134e
+Q058,requests page: SELECT priority_levels,Same normalized query family retained,app/coordinator.py:274 (requests_page); app/frontend.py:163 (request_page),"SELECT level_name,deadline_hours FROM priority_levels ORDER BY priority_id",Q118,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,4c649aa18f60031e7777d799321fd1f1f2fefbcfc48f1dc834bb9ace0d09a957
+Q059,"member profile: SELECT users, roles, member_profiles",Same normalized query family retained,app/member.py:56 (member_profile),"
+        SELECT u.user_id,u.email,p.first_name,p.last_name,p.phone,p.address,p.city
+        FROM users u JOIN roles r ON r.role_id=u.role_id
+        JOIN member_profiles p ON p.user_id=u.user_id
+        WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member'
+    ",Q119,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,5c257c6300331fc966d1789e2ad689846974fe518a73c919e56a5b375864142a
+Q060,"load member: SELECT users, roles",Same normalized query family retained,app/member.py:112 (load_member),"
+                    SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
+                    WHERE u.firebase_uid=:uid AND u.is_active=TRUE AND r.role_name='member'
+                ",Q120,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,85121313a833bc59a06fd4aab5bdd9d9a43069917d3fa901c63b61604d5106d6
+Q061,"member requests: SELECT referrals, organizations, service_requests, services, priority_levels",Same normalized query family retained,app/member.py:213 (member_requests),"
+            SELECT sr.request_id,sr.status,sr.created_at,s.name AS service_name,
+                   p.level_name AS priority,p.deadline_hours AS priority_hours,
+                   (SELECT r.response_deadline FROM referrals r WHERE r.request_id=sr.request_id
+                    ORDER BY r.attempt_number DESC LIMIT 1) AS response_deadline,
+                   (SELECT o.name FROM referrals r JOIN organizations o ON o.organization_id=r.organization_id
+                    WHERE r.request_id=sr.request_id ORDER BY r.attempt_number DESC LIMIT 1) AS org_name
+            FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+            JOIN priority_levels p ON p.priority_id=sr.priority_id
+            WHERE sr.member_id=:owner ORDER BY sr.created_at DESC,sr.request_id DESC
+        ",Q122,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,ddcbe02d04e099919a69704905d637bfe8d57ddeb17f7e87bf42c46f9637bfc6
+Q062,"details: SELECT service_requests, services",Same normalized query family retained,app/member.py:244 (details),"
+            SELECT sr.created_at,sr.description,s.delivery_mode FROM service_requests sr
+            JOIN services s ON s.service_id=sr.service_id WHERE sr.request_id=:id
+        ",Q123,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,65c223bc5cc93d8224451c0767d237158468ce0e861bbebbb18ba91a2b5c49c3
+Q063,"details: SELECT referral_status_history, referrals",Same normalized query family retained,app/member.py:248 (details),"
+            SELECT h.new_status AS text,h.changed_at AS time FROM referral_status_history h
+            JOIN referrals r ON r.referral_id=h.referral_id WHERE r.request_id=:id
+            ORDER BY h.changed_at,h.history_id
+        ",Q124,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,b0b108f3ca3cbcfd2c05eb0502667d4747f27ebf9d045a3437b6e57dd8f5a208
+Q064,"details: SELECT referrals, organizations",Same normalized query family retained,app/member.py:253 (details),"
+            SELECT o.name,o.contact_email AS email,o.contact_phone AS phone,r.status
+            FROM referrals r JOIN organizations o ON o.organization_id=r.organization_id
+            WHERE r.request_id=:id ORDER BY r.attempt_number DESC LIMIT 1
+        ",Q125,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,7377099cfccce325cb4b2e4c8dcefa74f74db80dc2f625ea71f9feb7f4e1fde5
+Q065,saved feedback: SELECT feedback,Same normalized query family retained,app/member.py:291 (saved_feedback),"
+        SELECT feedback_id,is_helpful,comment FROM feedback WHERE request_id=:id AND member_id=:member
+    ",Q126,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c815932791b1c1deebc8c55c99e3e0ace781124190ae1383915a3d1949e165bb
+Q066,"representative: SELECT users, roles, organization_representatives, organizations",Modified template with source-reviewed feature preservation,app/organization.py:29 (representative),"
+        SELECT u.user_id,rep.organization_id,o.name AS org_name,o.status AS raw_status
+        FROM users u JOIN roles role ON role.role_id=u.role_id
+        JOIN organization_representatives rep ON rep.user_id=u.user_id
+        JOIN organizations o ON o.organization_id=rep.organization_id
+        WHERE {'u.firebase_uid=:id' if uid is not None else 'u.user_id=:id'} AND u.is_active=TRUE AND role.role_name='representative'
+    ",Q127,Representative identity now includes latest application status so rejection is distinct from pending approval.,d8c45d5a5a0e2dd02cef51314993de8c54e1cae364e3830f681a4928ab7a431a
+Q067,"rows: SELECT referrals, service_requests, services, priority_levels",Same normalized query family retained,app/organization.py:105 (rows),"
+        SELECT r.referral_id,r.request_id,r.status AS raw_status,r.response_deadline,
+               (r.response_deadline <= :now) AS is_overdue,
+               sr.status AS request_status,sr.created_at,sr.description AS details,
+               s.name AS service_name,s.delivery_mode,p.level_name AS priority,
+               p.deadline_hours AS priority_hours
+        FROM referrals r JOIN service_requests sr ON sr.request_id=r.request_id
+        JOIN services s ON s.service_id=sr.service_id
+        JOIN priority_levels p ON p.priority_id=sr.priority_id
+        WHERE r.organization_id=:org ORDER BY r.referral_id DESC
+    ",Q128,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,b539b6223d8e37f909cb0382bc84cad9da6af7cf1e19c0e4a8d808b71b68959b
+Q068,dashboard: SELECT organization_services,Same normalized query family retained,app/organization.py:135 (dashboard),SELECT COUNT(DISTINCT service_id) FROM organization_services WHERE organization_id=:org,Q130,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,8d4dd7970416aad4e93e437e352e49052b7dccfe2931cb9d0542919481fc7ad4
+Q069,render services: SELECT service_categories,Same normalized query family retained,app/organization.py:221 (render_services),SELECT name FROM service_categories ORDER BY name,Q131,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,b41c7a84d3daf1823834fc5d1e7ecee17f61653ca28bbc91a626f1d6ca6fb77d
+Q070,"render services: SELECT services, service_categories",Same normalized query family retained,app/organization.py:222 (render_services),"SELECT s.service_id,s.name,s.description,s.delivery_mode,c.name AS category
+            FROM services s JOIN service_categories c ON c.category_id=s.category_id
+            WHERE s.is_active=TRUE AND c.is_active=TRUE ORDER BY s.name,s.service_id",Q132,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,5585a6fdcfa5f655fba40cf47cda076a5a58e6dde5586893c756150da03c8136
+Q071,render services: SELECT service_areas,Same normalized query family retained,app/organization.py:225 (render_services),"SELECT area_id,region_name,city FROM service_areas
+            WHERE is_active=TRUE ORDER BY city,region_name,area_id",Q133,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,1db0613878568579520a6d5d1a9466c69cfd9f6d8e4346c69c7864076e4a6ab2
+Q072,details: SELECT referral_status_history,Same normalized query family retained,app/organization.py:332 (details),"SELECT new_status AS text,changed_at AS time
+            FROM referral_status_history WHERE referral_id=:id ORDER BY history_id",Q134,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,ca71f0cd0f0357372b6c32c34701440b5170e83d9d1a48901fc39770cc8449e6
+Q073,"details: SELECT service_requests, users, member_profiles",Same normalized query family retained,app/organization.py:337 (details),"
+                SELECT u.email AS contact_email,p.phone AS contact_phone,p.address AS contact_address,
+                       p.first_name,p.last_name FROM service_requests sr JOIN users u ON u.user_id=sr.member_id
+                JOIN member_profiles p ON p.user_id=u.user_id WHERE sr.request_id=:id
+            ",Q135,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,867a6c085981825a93802388bc7ccac268e9230d489a5a83bcabf448310d1f6c
+Q074,act: SELECT referrals,Same normalized query family retained,app/organization.py:367 (act),"SELECT referral_id FROM referrals WHERE referral_id=:referral
+                AND request_id=:request AND organization_id=:org",Q136,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,76bfa1583f39cb9d0d9b158be722a42a739a9c6700917b67888f5950059fd3ab
+Q075,"save profile: SELECT users, roles",Same normalized query family retained,app/registration.py:79 (save_profile); app/services/cancellations.py:18 (cancel_request); app/services/feedback.py:27 (submit_feedback); app/services/guest_requests.py:90 (create_guest_request); app/services/manual_assignment.py:40 (assign_request); app/services/member_profiles.py:32 (update_profile); app/services/organization_approvals.py:50 (decide_application); app/services/organization_status.py:19 (change_organization_status),"
+                SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
+                WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member' FOR UPDATE
+            ",Q153,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,30d9f431068a8c9c28826ea13d48ca5cb6462c0ddb48e9654aa112755354b38e
+Q076,save profile: SELECT member_profiles,Same normalized query family retained,app/registration.py:85 (save_profile); app/services/member_profiles.py:37 (update_profile),"
+                SELECT first_name,last_name,phone,address,city FROM member_profiles WHERE user_id=:id
+            ",Q187,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,7e86b924ab494f68598aba1de5b0889d9c47dedd60dce3e18882f1fed085f4e0
+Q077,save profile: INSERT member_profiles,Same normalized query family retained,app/registration.py:92 (save_profile); app/services/guest_requests.py:130 (create_guest_request),"
+                INSERT INTO member_profiles(user_id,first_name,last_name,phone,address,city)
+                VALUES(:id,:first_name,:last_name,:phone,:address,:city)
+            ",Q175,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,76934d91175b1bebcdc80fe767cfeb1d99c81f28fceddd9b9b03f53998851db3
+Q078,submit guest request: SELECT,Same normalized query family retained,app/requests.py:46 (submit_guest_request); app/services/guest_requests.py:83 (create_guest_request),select(EventOutbox).where(EventOutbox.deduplication_key == key),Q137,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,620d4c1a5ba5a1e04ed91cba4955fccb69cf5caaed0eaf983e8d97ab54219ba7
+Q079,record attendance: SELECT,Same normalized query family retained,app/services/attendance.py:17 (record_attendance); app/services/completions.py:24 (complete_referral); app/services/referrals.py:20 (accept_referral); app/services/referrals.py:78 (reject_referral),select(Referral.request_id).where(Referral.referral_id == referral_id),Q138,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d5ee7374891484f951f423e71e65af9b9ab7c3ed155102a377738e8a9ade8a78
+Q080,record attendance: SELECT,Same normalized query family retained,app/services/attendance.py:21 (record_attendance); app/services/attendance.py:93 (handle_request_attended); app/services/cancellations.py:14 (cancel_request); app/services/completions.py:28 (complete_referral); app/services/feedback.py:23 (submit_feedback); app/services/feedback.py:76 (handle_feedback_submitted); app/services/manual_assignment.py:16 (assignment_choices); app/services/manual_assignment.py:34 (assign_request); app/services/referrals.py:24 (accept_referral); app/services/referrals.py:82 (reject_referral),select(ServiceRequest).where(ServiceRequest.request_id == request_id).with_for_update(),Q139,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d942a4ef4a625321c127bc19cf49ed4a340bd841e4639a3321ecb5cd4a03056d
+Q081,record attendance: SELECT,Same normalized query family retained,app/services/attendance.py:23 (record_attendance); app/services/completions.py:30 (complete_referral); app/services/referrals.py:26 (accept_referral); app/services/referrals.py:84 (reject_referral),select(Referral).where(Referral.referral_id == referral_id).with_for_update(),Q140,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d1e580a00694ff386e37626c11058ce6080b42046ce7658d8aeaecbdc1965db9
+Q082,"record attendance: SELECT organization_representatives, users, roles",Modified template with source-reviewed feature preservation,app/services/attendance.py:27 (record_attendance),"
+            SELECT rep.representative_id, rep.organization_id
+            FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id
+            JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.user_id=:user AND u.is_active=TRUE
+              AND r.role_name='representative' FOR UPDATE
+        ",Q141,Attendance authorization now excludes unapproved applicants; valid owned attendance behavior remains.,359bd8c1564a406e345b4aed2169739b8cbdf2b8427f5e31a846427bc974c075
+Q083,record attendance: SELECT attendance_records,Same normalized query family retained,app/services/attendance.py:37 (record_attendance),"
+            SELECT attendance_id, referral_id, first_attended_at, is_on_time
+            FROM attendance_records WHERE request_id=:request FOR UPDATE
+        ",Q142,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3813789e80b129ddc3c62d32dbff395844c1916fa8264c3bd946cf094eca1d1b
+Q084,record attendance: SELECT organization_services,Same normalized query family retained,app/services/attendance.py:48 (record_attendance); app/services/referrals.py:52 (accept_referral),"
+            SELECT current_active_referrals FROM organization_services
+            WHERE organization_id=:org AND service_id=:service AND service_area_id=:area
+            FOR UPDATE
+        ",Q143,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,7bacb1ec0684ad6ffadc5ecab584871b9dab3a65b33251841ad832facdf28687
+Q085,record attendance: INSERT attendance_records,Same normalized query family retained,app/services/attendance.py:61 (record_attendance),"
+            INSERT INTO attendance_records
+              (request_id, referral_id, attended_by_representative_id, first_attended_at, is_on_time)
+            VALUES (:request, :referral, :rep, :now, :on_time)
+        ",Q144,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,ae36aeeef7f4ca0b9196a25800a961cbb8e18ee013fd5f0189cdef2e1ecb611e
+Q086,record attendance: SELECT attendance_records,Same normalized query family retained,app/services/attendance.py:67 (record_attendance),SELECT attendance_id FROM attendance_records WHERE request_id=:request,Q145,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d8726399762af9806f538b64a371dfcef35e50234ad50952982ec67513630d11
+Q087,record attendance: UPDATE referrals,Same normalized query family retained,app/services/attendance.py:70 (record_attendance); app/services/completions.py:88 (complete_referral),SQLAlchemy dirty-object flush/commit: referral.status = 'attended',Q146,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,5d594f31fad8a00396ee3fc929aedeb9192b112b9eff9284299224c47ff1366a
+Q088,record attendance: UPDATE service_requests,Same normalized query family retained,app/services/attendance.py:71 (record_attendance); app/services/cancellations.py:30 (cancel_request); app/services/completions.py:89 (complete_referral); app/services/referrals.py:132 (reject_referral),SQLAlchemy dirty-object flush/commit: request.status = 'in_progress',Q147,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,e3f113b8f7144640f07f902d90f5bc132220b40a7b8c6ed7a38a7f1507979a77
+Q089,record attendance: INSERT referral_status_history,Same normalized query family retained,app/services/attendance.py:72 (record_attendance); app/services/completions.py:90 (complete_referral); app/services/referrals.py:66 (accept_referral); app/services/referrals.py:127 (reject_referral),"session.add(ReferralStatusHistory(referral_id=referral_id, old_status='accepted', new_status='attended', changed_by_user_id=user_id, notes='Organization confirmed first attendance')); object definition: ReferralStatusHistory(referral_id=referral_id, old_status='accepted', new_status='attended', changed_by_user_id=user_id, notes='Organization confirmed first attendance')",Q148,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c56629657630790881ad68661bd8f6f52aa46b717b396c04d990fbafceacf64b
+Q090,"handle request attended: SELECT attendance_records, referrals",Same normalized query family retained,app/services/attendance.py:97 (handle_request_attended),"
+            SELECT a.first_attended_at, a.is_on_time, r.status
+            FROM attendance_records a JOIN referrals r ON r.referral_id=a.referral_id
+            WHERE a.request_id=:request AND r.request_id=:request
+              AND a.attendance_id=:attendance AND a.referral_id=:referral
+        ",Q149,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,71231d23621891da5ed0b0d8fe6102613715cdaf5bc17d8c98e02dbb283d65af
+Q091,"handle request attended: SELECT attendance_records, service_requests",Same normalized query family retained,app/services/attendance.py:107 (handle_request_attended),"
+            SELECT a.first_attended_at <= s.attendance_deadline
+            FROM attendance_records a JOIN service_requests s ON s.request_id=a.request_id
+            WHERE a.attendance_id=:id
+        ",Q150,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,854cd2adee5775a489550536ade22278cc24e5edd1b84be39e2130f03bd1ae92
+Q092,"handle request attended: SELECT users, roles",Same normalized query family retained,app/services/attendance.py:116 (handle_request_attended); app/services/feedback.py:105 (handle_feedback_submitted); app/services/notifications.py:21 (alert_coordinators),"
+            SELECT u.user_id FROM users u JOIN roles r ON r.role_id=u.role_id
+            WHERE u.is_active=TRUE AND r.role_name='coordinator'
+        ",Q151,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3bbac624ac9ac8a1eba6dc5207fafe7d1c32157ab12f69ceb6d511e78bc06cd1
+Q093,cancel request: SELECT,Same normalized query family retained,app/services/cancellations.py:17 (cancel_request); app/services/manual_assignment.py:19 (assignment_choices); app/services/manual_assignment.py:38 (assign_request),select(Referral).where(Referral.request_id == request_id).order_by(Referral.attempt_number).with_for_update(),Q152,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,56fe63b47098b9ce96d06e6d1524710aa4227ce6c534fc9749634df61c914709
+Q094,"cancel request: SELECT attendance_records, referrals",Same normalized query family retained,app/services/cancellations.py:26 (cancel_request),"SELECT a.attendance_id FROM attendance_records a
+            JOIN referrals r ON r.referral_id=a.referral_id WHERE r.request_id=:id LIMIT 1",Q154,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,64ab6de7daedc4f3da5086b52cd26db85effbaa1a25410dfc922153013d2ccab
+Q095,"complete referral: SELECT organization_representatives, users, roles",Same normalized query family retained,app/services/completions.py:34 (complete_referral); app/services/referrals.py:30 (accept_referral); app/services/referrals.py:90 (reject_referral),"
+            SELECT rep.organization_id FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.user_id=:user AND u.is_active=TRUE
+              AND r.role_name='representative' FOR UPDATE
+        ",Q233,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,391c73ec53f0b99a827b53c501f854fa9600cffb0318cc4d1c1e3eea199e17a0
+Q096,complete referral: SELECT service_completions,Same normalized query family retained,app/services/completions.py:42 (complete_referral),"
+            SELECT completion_id,referral_id,outcome,summary_notes
+            FROM service_completions WHERE request_id=:id FOR UPDATE
+        ",Q156,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,0ee22143752c4d398002525a085fb5c8cbbeea779f47b97f160cc6d8a48eefdd
+Q097,complete referral: SELECT attendance_records,Same normalized query family retained,app/services/completions.py:55 (complete_referral),"
+            SELECT attendance_id,referral_id FROM attendance_records WHERE request_id=:id FOR UPDATE
+        ",Q157,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,844e92b79171be9e0c9c238b6166696a807a78238665c2b0a84913a438d2b696
+Q098,complete referral: SELECT organization_services,Same normalized query family retained,app/services/completions.py:60 (complete_referral); app/services/referrals.py:109 (reject_referral),"
+            SELECT organization_service_id FROM organization_services
+            WHERE organization_id=:org AND service_id=:service AND service_area_id=:area
+            FOR UPDATE
+        ",Q158,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,56c9ba015019ea81a246ff3547a80ea6f1014b4e3fd2d9a4902f3b6045e6cd50
+Q099,complete referral: SELECT attendance_records,Same normalized query family retained,app/services/completions.py:69 (complete_referral),"
+            SELECT first_attended_at <= :now FROM attendance_records WHERE attendance_id=:id
+        ",Q159,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3bc8851a17f95069f68e7661c9ae6114a8c7c1f23f0eb57fd80d12c2305b9769
+Q100,complete referral: UPDATE organization_services,Same normalized query family retained,app/services/completions.py:74 (complete_referral); app/services/referrals.py:117 (reject_referral),"
+            UPDATE organization_services SET current_active_referrals=current_active_referrals-1
+            WHERE organization_service_id=:id AND current_active_referrals>0
+        ",Q160,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d0519e68f79a8923a80fcf96c01594becb62f05c7f8c4c5bc71552486e585bd1
+Q101,complete referral: INSERT service_completions,Same normalized query family retained,app/services/completions.py:80 (complete_referral),"
+            INSERT INTO service_completions(request_id,referral_id,completed_at,outcome,summary_notes)
+            VALUES(:request,:referral,:now,:outcome,:notes)
+        ",Q161,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3f7fc6c749ea1c6d241502c381ad7dc86cba661d2082079e60411fe5303e757c
+Q102,complete referral: SELECT service_completions,Same normalized query family retained,app/services/completions.py:85 (complete_referral),SELECT completion_id FROM service_completions WHERE request_id=:id,Q162,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,b10386422889fec92d9e10bbc8b9ba90939b1be8c2194947c386eb557f1886ba
+Q103,"submit feedback: SELECT service_completions, referrals",Same normalized query family retained,app/services/feedback.py:35 (submit_feedback),"
+            SELECT r.organization_id FROM service_completions c
+            JOIN referrals r ON r.referral_id=c.referral_id
+            WHERE c.request_id=:id AND r.request_id=:id AND r.status='completed'
+            FOR UPDATE
+        ",Q163,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3f1a2b387d835b08f83d8deab141a9ec39d1de4beaa462df346eed19d49b6191
+Q104,submit feedback: SELECT feedback,Same normalized query family retained,app/services/feedback.py:43 (submit_feedback),"
+            SELECT feedback_id,member_id,organization_id,is_helpful,comment
+            FROM feedback WHERE request_id=:id FOR UPDATE
+        ",Q164,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,faf3890960696290b66b17a8c0edd84293a20ffd3006489460ac29c31c035ea0
+Q105,submit feedback: INSERT feedback,Same normalized query family retained,app/services/feedback.py:54 (submit_feedback),"
+            INSERT INTO feedback(request_id,member_id,organization_id,is_helpful,comment)
+            VALUES(:request,:member,:org,:helpful,:comment)
+        ",Q165,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,738321a3f5fe56ad37f9adcb33cd83cf02818b313eb2505fb89a73eef84628b1
+Q106,submit feedback: SELECT feedback,Same normalized query family retained,app/services/feedback.py:59 (submit_feedback),SELECT feedback_id FROM feedback WHERE request_id=:id,Q166,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,dc45566a5d25f6c94ebc2d3e2b7fd6020b7ea5984eb3976513301ef87663b43a
+Q107,"handle feedback submitted: SELECT feedback, service_completions, referrals",Same normalized query family retained,app/services/feedback.py:80 (handle_feedback_submitted),"
+            SELECT f.organization_id,f.is_helpful FROM feedback f
+            JOIN service_completions c ON c.request_id=f.request_id
+            JOIN referrals r ON r.referral_id=c.referral_id AND r.request_id=f.request_id
+            WHERE f.feedback_id=:feedback AND f.request_id=:request AND f.member_id=:member
+              AND f.organization_id=r.organization_id AND r.status='completed'
+        ",Q167,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,41e56e622cb9175ceefc595646009fba5c8346b3e4c11d4db0d80bce0a2dc3c5
+Q108,"handle feedback submitted: SELECT organization_representatives, users, roles",Same normalized query family retained,app/services/feedback.py:90 (handle_feedback_submitted); app/services/notifications.py:47 (handle_referral_created),"
+            SELECT u.user_id,rep.is_primary_contact FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.organization_id=:org AND u.is_active=TRUE AND r.role_name='representative'
+            ORDER BY u.user_id
+        ",Q168,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,9c536ecea21561043c1239d3088a1bfe891af7d27d719cd1ce4a34ac79d20e27
+Q109,"service choices: SELECT services, service_categories",Modified template with source-reviewed feature preservation,app/services/guest_requests.py:24 (service_choices),"
+        SELECT s.service_id,s.name AS service_name,c.name AS category,s.delivery_mode
+        FROM services s JOIN service_categories c ON c.category_id=s.category_id
+        WHERE s.is_active=TRUE AND c.is_active=TRUE ORDER BY s.service_id
+    ",Q169,Grouped eligibility replaces N+1 area reads while retaining one-distinct-active-area rule.,28b1b59b14ec4b5714466360e019c80d539defe083fd24f51da447a26578792d
+Q110," areas: SELECT organization_services, organizations, service_areas",Same normalized query family retained,app/services/guest_requests.py:42 (_areas),"
+        SELECT DISTINCT a.area_id,a.region_name,a.city
+        FROM organization_services os JOIN organizations o ON o.organization_id=os.organization_id
+        JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE os.service_id=:service AND os.status='active'
+          AND o.status='approved' AND a.is_active=TRUE ORDER BY a.area_id
+    ",Q170,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,4b25101c2f81a9f522f95a0b87f76be4ca9d1bba3ad8bac06256e2bed817cfa5
+Q111,"create guest request: SELECT services, service_categories",Same normalized query family retained,app/services/guest_requests.py:98 (create_guest_request),"
+            SELECT s.name,s.delivery_mode FROM services s
+            JOIN service_categories c ON c.category_id=s.category_id
+            WHERE s.service_id=:id AND s.is_active=TRUE AND c.is_active=TRUE FOR UPDATE
+        ",Q171,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,df2ad15b0accdbaf276fb612d82d707ad8e5966cfd262f2e1219279a2e76e066
+Q112,create guest request: SELECT priority_levels,Same normalized query family retained,app/services/guest_requests.py:112 (create_guest_request),"
+            SELECT priority_id,level_name,deadline_hours FROM priority_levels WHERE level_name=:name
+        ",Q172,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3f6b735074fbf7d3655cd1c431d6d2151cae42e6e2209bde23dad56f09cc6e0c
+Q113,create guest request: INSERT users,Same normalized query family retained,app/services/guest_requests.py:124 (create_guest_request),"
+                INSERT INTO users(role_id,email,password_hash,is_active)
+                VALUES(:role,:email,:password,TRUE)
+            ",Q174,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,567bbc9a6c6c9621c2ae167073c64759d49410cc149b731e9474f32fbee33dd7
+Q114,"create guest request: SELECT users, roles, member_profiles",Same normalized query family retained,app/services/guest_requests.py:137 (create_guest_request),"
+                SELECT u.email,p.first_name,p.last_name,p.phone,p.address,p.city
+                FROM users u JOIN roles r ON r.role_id=u.role_id
+                JOIN member_profiles p ON p.user_id=u.user_id
+                WHERE u.user_id=:id AND u.is_active=TRUE AND r.role_name='member' FOR UPDATE
+            ",Q176,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,88a170beb9fa1b25a9bd85466c87819b4a33c8368604c44c94622a7802745065
+Q115,create guest request: INSERT service_requests,Same normalized query family retained,app/services/guest_requests.py:152 (create_guest_request),"session.add(request); object definition: ServiceRequest(member_id=owner_id, service_id=service_id, service_area_id=areas[0].area_id, priority_id=priority.priority_id, title=fields['details'].splitlines()[0][:150], description=fields['details'], status='submitted', attendance_deadline=deadline)",Q177,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,4a01c87d8687fee98a718bfe2ce3a50bf3ccdf687659e4844d1b6a5b1a9a7dbf
+Q116,"owned request: SELECT service_requests, services, users, roles, priority_levels, member_profiles",Same normalized query family retained,app/services/guest_requests.py:164 (owned_request),"
+        SELECT sr.request_id,sr.status,sr.priority_id,sr.attendance_deadline,
+               s.name AS service_name,p.level_name AS priority,p.deadline_hours AS priority_hours,
+               mp.first_name,mp.last_name
+        FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+        JOIN users u ON u.user_id=sr.member_id JOIN roles role ON role.role_id=u.role_id
+        JOIN priority_levels p ON p.priority_id=sr.priority_id
+        JOIN member_profiles mp ON mp.user_id=sr.member_id
+        WHERE sr.request_id=:id AND sr.member_id=:owner
+          AND u.is_active=TRUE AND role.role_name='member'
+    ",Q178,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,ff1bea906e2ba2f48879dae352dd5f39496b9432a03b2c2580602526fbb4adad
+Q117,owned request: SELECT referrals,Same normalized query family retained,app/services/guest_requests.py:177 (owned_request),"
+        SELECT response_deadline FROM referrals WHERE request_id=:id ORDER BY attempt_number DESC LIMIT 1
+    ",Q179,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,51e1065e07dcac8a2d82f91c33039ce9ba8dd06b1afab67c2d32d07337fa2c7a
+Q118,assignment choices: SELECT organizations,Modified template with source-reviewed feature preservation,app/services/manual_assignment.py:24 (assignment_choices),"SELECT organization_id,name FROM organizations",Q180,Eligible partner names are restricted by bound IDs and loaded on the individual request review.,f28720e09c2b257398a5ffc3827d1e537fbf141697828c99b8bdac1d3e5586f4
+Q119,assign request: SELECT,Same normalized query family retained,app/services/manual_assignment.py:50 (assign_request),"select(ReferralStatusHistory.history_id).where(ReferralStatusHistory.referral_id == latest.referral_id, ReferralStatusHistory.changed_by_user_id == actor, ReferralStatusHistory.new_status == 'sent', ReferralStatusHistory.notes == 'Coordinator manual assignment')",Q181,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,5cb2d61ed4a3306e9b852a328333c6925c7851a00e45ddb52209ea7a9b14c713
+Q120,assign request: SELECT,Same normalized query family retained,app/services/manual_assignment.py:76 (assign_request),select(Referral.referral_id).where(Referral.request_id == request_id).order_by(Referral.attempt_number.desc()).limit(1),Q182,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,e456256bbf8ce9a0985f9afd037d35235e91796f37917964cf533a4eccc165f3
+Q121,update profile: UPDATE member_profiles,Same normalized query family retained,app/services/member_profiles.py:43 (update_profile),"UPDATE member_profiles SET first_name=:first_name,last_name=:last_name,
+            phone=:phone,address=:address,city=:city WHERE user_id=:id",Q188,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,fb79354eb18d8186e0fd01071c7d89af81e9006401341a8cc7c96520759df106
+Q122,notify: INSERT notifications,Same normalized query family retained,app/services/notifications.py:15 (notify),"insert(Notification).values(user_id=user_id, related_request_id=request_id, deduplication_key=key, title=title, message=message, type=kind).on_duplicate_key_update(notification_id=Notification.notification_id)",Q190,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,a9fcdad8c22faf9671790ed9013057079e8886b1519681381b7bc113c657193e
+Q123,handle referral created: SELECT service_requests,Same normalized query family retained,app/services/notifications.py:36 (handle_referral_created),SELECT request_id FROM service_requests WHERE request_id = :id FOR UPDATE,Q191,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,79b87190cc77efb9c360021ad457174b63ba48ac975f0835b676984fe6974352
+Q124,handle referral created: SELECT referrals,Same normalized query family retained,app/services/notifications.py:41 (handle_referral_created),"
+            SELECT organization_id FROM referrals
+            WHERE referral_id = :referral AND request_id = :request
+        ",Q192,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,29542d4d9559ffcb027ea40eb684f9a6b3faf7e248c23f3072934b55056efc96
+Q125,"add offering: SELECT organization_representatives, users, roles",Same normalized query family retained,app/services/offerings.py:22 (add_offering); app/services/offerings.py:100 (update_offering),"SELECT rep.organization_id
+            FROM organization_representatives rep JOIN users u ON u.user_id=rep.user_id
+            JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=:id
+            AND u.is_active=TRUE AND r.role_name='representative' FOR UPDATE",Q193,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c4c32e96b9bd7ba8af87db7959b317c571bdb315411b4fa8891f84bdaf326185
+Q126,add offering: SELECT organizations,Same normalized query family retained,app/services/offerings.py:29 (add_offering); app/services/offerings.py:107 (update_offering); app/services/organization_approvals.py:43 (decide_application); app/services/organization_status.py:15 (change_organization_status),"SELECT status FROM organizations
+            WHERE organization_id=:org FOR UPDATE",Q194,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,f8d0fdace18d1dc85e392052e4c9cfa7f979ae9c1219f1e0ff1c00177740de40
+Q127,"add offering: SELECT services, service_categories",Same normalized query family retained,app/services/offerings.py:33 (add_offering),"SELECT s.service_id FROM services s
+            JOIN service_categories c ON c.category_id=s.category_id
+            WHERE s.service_id=:id AND s.is_active=TRUE AND c.is_active=TRUE FOR UPDATE",Q195,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,f662bae26afd07cd7453978ab6d7c1d1adf6878741ff45bb2153d176d92db69d
+Q128,add offering: SELECT service_areas,Same normalized query family retained,app/services/offerings.py:37 (add_offering),"SELECT area_id FROM service_areas
+            WHERE area_id=:id AND is_active=TRUE FOR UPDATE",Q196,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,0582d22789482533bb949690f73d1e0f7ae3804df9626fb5ddec332492d1213e
+Q129,add offering: SELECT priority_levels,Same normalized query family retained,app/services/offerings.py:39 (add_offering),"SELECT priority_id,level_name FROM priority_levels
+            ORDER BY priority_id FOR UPDATE",Q197,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,1ae9f0166a6a921bc08891eefc44b939bc6b83915860b320237a9a6cd0d53ee5
+Q130,add offering: SELECT organization_services,Same normalized query family retained,app/services/offerings.py:46 (add_offering),"SELECT organization_service_id,status,active_referral_limit
+            FROM organization_services WHERE organization_id=:org AND service_id=:service
+            AND service_area_id=:area FOR UPDATE",Q198,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,88d0b4314f338a0eae94bc97a1fb76acb648fb2c369bca0c9d0c9f1aa92a6007
+Q131,add offering: SELECT service_priority_support,Same normalized query family retained,app/services/offerings.py:51 (add_offering),"SELECT priority_id FROM service_priority_support
+                WHERE organization_service_id=:id AND is_supported=TRUE FOR UPDATE",Q199,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,97f42f03184770dae162fd967e4e1799f3a6db614163a0eb2679f0bd11751f5e
+Q132,add offering: INSERT organization_services,Same normalized query family retained,app/services/offerings.py:58 (add_offering),"INSERT INTO organization_services
+            (organization_id,service_id,service_area_id,status,active_referral_limit,current_active_referrals)
+            VALUES(:org,:service,:area,:status,:limit,0)",Q200,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,517bb759af83c78ddc60e8bd0f1fc4a0926869063563351585ff49f56f62a2e3
+Q133,add offering: INSERT service_priority_support,Same normalized query family retained,app/services/offerings.py:63 (add_offering),"INSERT INTO service_priority_support
+                (organization_service_id,priority_id,is_supported) VALUES(:id,:priority,TRUE)",Q201,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,45d381a54b51521d1e53d988a4d0e22f89d575f3650a6919ad5f47ac8e57b88e
+Q134,"organization offerings: SELECT organization_availability, organization_services, services, service_categories, service_areas",Same normalized query family retained,app/services/offerings.py:70 (organization_offerings),"
+        SELECT os.organization_service_id,os.service_id,os.status AS raw_status,
+               os.active_referral_limit AS max_referrals,os.current_active_referrals,
+               s.name AS service_name,s.description,s.delivery_mode,c.name AS category,
+               a.region_name,a.city,
+               COALESCE((SELECT MAX(av.availability_id) FROM organization_availability av
+                   WHERE av.organization_service_id=os.organization_service_id),0) AS availability_version
+        FROM organization_services os JOIN services s ON s.service_id=os.service_id
+        JOIN service_categories c ON c.category_id=s.category_id
+        JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE os.organization_id=:org ORDER BY os.organization_service_id
+    ",Q202,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,b5b4a2506b114b1b3aaf26cbf7e5440ac1a07484cdf53906652b808bb33751c5
+Q135,update offering: SELECT organization_services,Same normalized query family retained,app/services/offerings.py:111 (update_offering),"
+            SELECT status,active_referral_limit,current_active_referrals FROM organization_services
+            WHERE organization_service_id=:id AND organization_id=:org FOR UPDATE
+        ",Q203,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,825032a1a71f679224a64bd6bebb93ae0090c94be1da7da9da0ce8d096e1761d
+Q136,update offering: SELECT organization_availability,Same normalized query family retained,app/services/offerings.py:123 (update_offering),"SELECT availability_id FROM organization_availability
+            WHERE organization_service_id=:id ORDER BY availability_id DESC LIMIT 1 FOR UPDATE",Q204,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,cbf176b87c35e30536078762888523d647f7cbbcc25883fb8420f9a435538520
+Q137,update offering: UPDATE organization_services,Same normalized query family retained,app/services/offerings.py:131 (update_offering),"
+            UPDATE organization_services SET status=:status,active_referral_limit=:limit
+            WHERE organization_service_id=:id AND organization_id=:org
+              AND current_active_referrals<=:limit
+        ",Q205,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,bc292be735216a2ea809d4d1a8a664ef4642cdbb8b48eff1996e501c6b720320
+Q138,update offering: INSERT organization_availability,Same normalized query family retained,app/services/offerings.py:139 (update_offering),"
+                INSERT INTO organization_availability(organization_service_id,action,recorded_at,recorded_by_user_id)
+                VALUES(:id,:action,:now,:actor)
+            ",Q206,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,6483199fe18eca65a54e490ece5f9ebb0d60953b98817f1b23ee36fde765e7fb
+Q139,"pending applications: SELECT organization_applications, organizations, organization_representatives, member_profiles",Same normalized query family retained,app/services/organization_approvals.py:15 (pending_applications),"
+        SELECT a.application_id,o.organization_id AS org_id,o.name AS org_name,
+               o.contact_email AS email,o.contact_phone AS phone,o.city AS service_area,
+               a.created_at,rep.full_name AS representative_name,mp.first_name,mp.last_name
+        FROM organization_applications a JOIN organizations o ON o.organization_id=a.organization_id
+        LEFT JOIN organization_representatives rep ON rep.user_id=a.submitted_by_user_id
+          AND rep.organization_id=o.organization_id
+        LEFT JOIN member_profiles mp ON mp.user_id=a.submitted_by_user_id
+        WHERE o.status='pending' AND a.status IN ('submitted','under_review')
+          AND a.application_id=(SELECT latest.application_id FROM organization_applications latest
+              WHERE latest.organization_id=o.organization_id ORDER BY latest.application_id DESC LIMIT 1)
+        ORDER BY a.application_id
+    ",Q207,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,54965c2452e0da25cb5f5798f28191b4a3cc9b05ceb9bc022d2ce4b77be9ca61
+Q140,decide application: SELECT organization_applications,Same normalized query family retained,app/services/organization_approvals.py:45 (decide_application),"SELECT application_id,status,submitted_by_user_id,decision_notes
+            FROM organization_applications WHERE application_id=:app AND organization_id=:org FOR UPDATE",Q208,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,da166b8a13a8ce60e619ea539a9a43147ded164c6b6358a5db027baf4730116a
+Q141,decide application: SELECT organization_applications,Same normalized query family retained,app/services/organization_approvals.py:55 (decide_application),"SELECT application_id FROM organization_applications
+            WHERE organization_id=:org ORDER BY application_id DESC LIMIT 1 FOR UPDATE",Q209,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,47adf2f8f36ac845528bf77b02853d2eef38a761be53d25a2bd33dac1686421a
+Q142,decide application: SELECT users,Same normalized query family retained,app/services/organization_approvals.py:68 (decide_application),SELECT user_id FROM users WHERE user_id=:id,Q210,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,def469a1e01ec87246d0e3b2b2721e77c41de77ca4069fc40f51f7bf371d530b
+Q143,decide application: UPDATE organization_applications,Same normalized query family retained,app/services/organization_approvals.py:71 (decide_application),"UPDATE organization_applications
+            SET status=:status,reviewed_by_user_id=:reviewer,decision_notes=:notes,decided_at=:now
+            WHERE application_id=:app",Q211,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,819e32bba43e9b60c19ce593a01e84ef39922e79cb58e9d44e8bd626f089c000
+Q144,decide application: UPDATE organizations,Same normalized query family retained,app/services/organization_approvals.py:76 (decide_application); app/services/organization_status.py:29 (change_organization_status),UPDATE organizations SET status='approved' WHERE organization_id=:org,Q212,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,cf87699ea8e05b399dcc9e9864ab4641a0f9e439cd1b2984a9dcad92ce76e167
+Q145,"organization profile: SELECT organization_representatives, users, roles, organizations",Same normalized query family retained,app/services/organization_profiles.py:14 (organization_profile),"SELECT o.organization_id,o.name AS org_name,o.status,
+        o.contact_email AS email,o.contact_phone AS phone,o.address,o.city,
+        rep.full_name AS contact_name
+        FROM organization_representatives rep JOIN users u ON u.user_id=rep.user_id
+        JOIN roles r ON r.role_id=u.role_id JOIN organizations o ON o.organization_id=rep.organization_id
+        WHERE rep.user_id=:user AND rep.organization_id=:org
+        AND u.is_active=TRUE AND r.role_name='representative'
+    ",Q213,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,24051ba475185bf35927850f89bd923b9d320fff37e9cd408bf905de3ac4239f
+Q146,"organization profile: SELECT organization_services, service_areas",Same normalized query family retained,app/services/organization_profiles.py:24 (organization_profile),"SELECT DISTINCT a.region_name,a.city
+        FROM organization_services os JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE os.organization_id=:org ORDER BY a.city,a.region_name",Q214,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,429ec112798e59cc5b0773b06cb3518c55ebd8c1a92e257fb5cf72ef775b4b5e
+Q147,"update organization profile: SELECT organization_representatives, users, roles",Same normalized query family retained,app/services/organization_profiles.py:47 (update_organization_profile),"SELECT rep.full_name,rep.phone FROM organization_representatives rep
+            JOIN users u ON u.user_id=rep.user_id JOIN roles r ON r.role_id=u.role_id
+            WHERE rep.user_id=:user AND rep.organization_id=:org
+            AND u.is_active=TRUE AND r.role_name='representative' FOR UPDATE",Q215,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,15d71576fdc59982ac03b9d5c3877aa790b5f19b5039a9a2649ccc1702e877d9
+Q148,update organization profile: SELECT organizations,Same normalized query family retained,app/services/organization_profiles.py:54 (update_organization_profile),"SELECT contact_phone,address,city FROM organizations
+            WHERE organization_id=:org FOR UPDATE",Q216,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c1d5232e132c5e6145f02f1197a091bb7f8c2ae1afac9f0b4ee3d0f36839481a
+Q149,update organization profile: UPDATE organizations,Same normalized query family retained,app/services/organization_profiles.py:62 (update_organization_profile),"UPDATE organizations SET contact_phone=:phone,address=:address,city=:city
+                WHERE organization_id=:org",Q217,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,69b4406fff74d54c14f31350deb5df94bfb7e8a725d51a70fee2da0235844f19
+Q150,update organization profile: UPDATE organization_representatives,Same normalized query family retained,app/services/organization_profiles.py:65 (update_organization_profile),"UPDATE organization_representatives SET full_name=:contact_name,phone=:phone
+                WHERE user_id=:user AND organization_id=:org",Q218,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c0ac09ae4727032b6e0eccfb9080962c3b2420944ee447a6a65474e41112dbe0
+Q151,"register organization: SELECT organization_representatives, organizations, organization_applications",Same normalized query family retained,app/services/organization_registration.py:39 (register_organization),"SELECT o.organization_id,o.name AS org_name,
+                o.address,o.city,o.contact_phone AS phone,o.contact_email,
+                rep.full_name AS contact_name,rep.phone AS representative_phone,
+                a.application_id,a.submission_notes
+                FROM organization_representatives rep
+                JOIN organizations o ON o.organization_id=rep.organization_id
+                JOIN organization_applications a ON a.organization_id=o.organization_id
+                    AND a.submitted_by_user_id=rep.user_id
+                WHERE rep.user_id=:id ORDER BY a.application_id LIMIT 1",Q219,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d92a7f28c86c1fd9750ebd57f2c341a9cf17849ab2fab7f1289befe0f595461d
+Q152,register organization: SELECT organizations,Same normalized query family retained,app/services/organization_registration.py:59 (register_organization),SELECT organization_id FROM organizations WHERE name=:name,Q220,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,5c633f1503ce07fa705a1060f10d8912f83bd6dead5862fc13801e9af1a54778
+Q153,register organization: INSERT organizations,Same normalized query family retained,app/services/organization_registration.py:68 (register_organization),"INSERT INTO organizations
+            (name,contact_email,contact_phone,address,city,status)
+            VALUES(:org_name,:email,:phone,:address,:city,'pending')",Q221,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,cdea01ed500a64e7f4fd7a0bfa5ec78b67ecf0b5e8be85e2579b05384c465f28
+Q154,register organization: INSERT organization_representatives,Same normalized query family retained,app/services/organization_registration.py:71 (register_organization),"INSERT INTO organization_representatives
+            (user_id,organization_id,full_name,phone,is_primary_contact)
+            VALUES(:user,:org,:contact_name,:phone,TRUE)",Q222,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,bfd7943b876f58260dc2c47cff6d01fd7689017c1fccb6412b95eb5e5d765ca5
+Q155,register organization: INSERT organization_applications,Same normalized query family retained,app/services/organization_registration.py:74 (register_organization),"INSERT INTO organization_applications
+            (organization_id,submitted_by_user_id,status,submission_notes)
+            VALUES(:org,:user,'submitted',:notes)",Q223,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,866c3018e3a341520e77b74dd3711a57e2c3ef68b73b9a8d5b5696e86794a5f4
+Q156,"password identity: SELECT users, roles",Same normalized query family retained,app/services/password_sessions.py:8 (password_identity),"SELECT u.firebase_uid AS uid,u.email FROM users u
+        JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=:id
+        AND u.is_active=TRUE AND r.role_name=:role",Q232,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,3be3b5bcb0072fb4129afb9d8e62160240ed94af80ca0eb1241f5f26a6cddf6d
+Q157,accept referral: UPDATE referrals,Same normalized query family retained,app/services/referrals.py:64 (accept_referral),SQLAlchemy dirty-object flush/commit: referral.status = 'accepted'; referral.responded_at = now,Q234,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,88ac26584f5ee2510ca4cf014a1d8582fd28556f0f2422f2f5496f217fb30c07
+Q158,reject referral: UPDATE referrals,Same normalized query family retained,app/services/referrals.py:124 (reject_referral),SQLAlchemy dirty-object flush/commit: referral.status = 'rejected'; referral.responded_at = now; referral.rejection_reason = reason,Q235,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,c55741bc4e0d47fb38a0f109796a443b0628340f0c2f0d14fba2e3b269af52e1
+Q159,report data: SELECT service_requests,Same normalized query family retained,app/services/reports.py:7 (report_data),"SELECT status,COUNT(*) AS count FROM service_requests GROUP BY status ORDER BY status",Q236,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d011bc99b446ab55ee00659a29947c0d4a52bda8336be6c173e9e776b6beb4b4
+Q160,report data: SELECT feedback,Same normalized query family retained,app/services/reports.py:8 (report_data),"SELECT COUNT(*) AS count,
+        COALESCE(SUM(CASE WHEN is_helpful=TRUE THEN 1 ELSE 0 END),0) AS helpful
+        FROM feedback WHERE is_helpful IS NOT NULL",Q237,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,268f43906348113531346cdb70880a365cd56f080b13b0599eef962f82201775
+Q161,report data: SELECT organizations,Same normalized query family retained,app/services/reports.py:13 (report_data),SELECT COUNT(*) FROM organizations WHERE status='approved',Q238,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,eb269ffd39790c4a7e9fb81fddddc28892bc7bccdf03a309aaa2d726ec5b3411
+Q162,"report data: SELECT service_requests, services, service_categories",Same normalized query family retained,app/services/reports.py:14 (report_data),"SELECT COALESCE(c.name,'Uncategorized') AS name,COUNT(*) AS count,
+        SUM(CASE WHEN sr.status='completed' THEN 1 ELSE 0 END) AS completed
+        FROM service_requests sr JOIN services s ON s.service_id=sr.service_id
+        LEFT JOIN service_categories c ON c.category_id=s.category_id
+        GROUP BY c.category_id,c.name ORDER BY name",Q239,SQL template comparison is not a feature-deletion claim; use the semantic review in SUBMISSION_READINESS.md.,d7a9a14479883cf948a1baa66a19fa958c35596e33000777fcbd650ed8e09cc1
+Q163,"public services: SELECT organization_services, organizations, services, service_areas",Modified template with source-reviewed feature preservation,app/services/service_browsing.py:11 (public_services),"
+        SELECT os.service_id,o.name AS org_name,s.description,
+               os.current_active_referrals,os.active_referral_limit
+        FROM organization_services os
+        JOIN organizations o ON o.organization_id=os.organization_id
+        JOIN services s ON s.service_id=os.service_id
+        JOIN service_areas a ON a.area_id=os.service_area_id
+        WHERE o.status='approved' AND os.status='active' AND a.is_active=TRUE
+          AND s.is_active=TRUE
+        ORDER BY os.service_id,o.name,o.organization_id
+    ",Q241; Q242,Catalog fields and provider summaries now use page-scoped reads; service details use an ID predicate.,109024cee6b1b884fd282292c539b553fcff55cafab135f2b727e4a5174120d0; 537c6f50dae55643bf26f5d2adca1dbb6b209b06a826e6851e41383e79da9760

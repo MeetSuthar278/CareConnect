@@ -5,7 +5,7 @@
 
 {% block content %}
 
-<p><a href="{{ url_for('my_requests') }}">&larr; Back to My Requests</a></p>
+<p><a href="{{ back_url }}">&larr; Back to My Requests</a></p>
 
 <div class="page-title-row">
     <div>
@@ -17,7 +17,6 @@
 
 <div class="row g-3">
 
-    <!-- Left side: details -->
     <div class="col-12 col-md-7">
         <div class="box">
             <h3>Details</h3>
@@ -26,7 +25,7 @@
                 <div class="detail-row"><dt>Assigned service</dt><dd>{{ req.assigned_service_name }}</dd></div>
                 {% endif %}
                 <div class="detail-row">
-                    <dt>Priority</dt>
+                    <dt>Preferred time frame</dt>
                     <dd>{{ priority_deadline(req) }}</dd>
                 </div>
                 <div class="detail-row">
@@ -39,11 +38,11 @@
                 </div>
                 <div class="detail-row">
                     <dt>Organization contact</dt>
-                    <dd>{% if assigned_org and req.status in ['Accepted', 'Completed'] %}{{ assigned_org.email }}<br>{{ assigned_org.phone }}{% else %}Available after acceptance{% endif %}</dd>
+                    <dd>{% if assigned_org %}{{ assigned_org.email }}<br>{{ assigned_org.phone }}{% else %}Available after acceptance{% endif %}</dd>
                 </div>
                 <div class="detail-row">
                     <dt>Sent on</dt>
-                    <dd>{{ req.created_at }}</dd>
+                    <dd>{{ req.created_at | display_time }}</dd>
                 </div>
                 <div class="detail-row">
                     <dt>Your notes</dt>
@@ -52,7 +51,6 @@
             </dl>
         </div>
 
-        {# Feedback is shown only when the request is completed #}
         {% if req.status == 'Completed' %}
             <div class="note-box mt-3">
                 This request is completed.
@@ -63,9 +61,8 @@
             </div>
         {% endif %}
 
-        {# Cancel is shown only while the request is not finished #}
         {% if req.status in ['Pending', 'Assigned', 'Rejected', 'Expired', 'Unmatched'] %}
-            <form method="post" action="{{ url_for('cancel_request', request_id=req.request_id) }}" class="mt-3">
+            <form method="post" action="{{ url_for('cancel_request', request_id=req.request_id, **list_query) }}" class="mt-3">
                 <input type="hidden" name="csrf_token" value="{{ member_csrf }}">
                 <button type="submit" class="btn-danger-outline btn-small"
                         {% if not can_cancel %}disabled{% endif %}
@@ -74,7 +71,6 @@
         {% endif %}
     </div>
 
-    <!-- Right side: history -->
     <div class="col-12 col-md-5">
         <div class="box">
             <h3 class="mb-3">Status history</h3>

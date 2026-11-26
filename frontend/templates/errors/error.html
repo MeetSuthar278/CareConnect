@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}{{ status }} · Unable to complete this request{% endblock %}
+{% block content %}
+<div class="form-box">
+    <h1>Unable to complete this request</h1>
+    <p class="eyebrow">Error {{ status }}</p>
+    <p role="alert">{{ message }}</p>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('home') }}" class="btn-main">Home</a>
+        <a href="{{ url_for('login') }}" class="btn-outline">Log in</a>
+    </div>
+</div>
+{% endblock %}

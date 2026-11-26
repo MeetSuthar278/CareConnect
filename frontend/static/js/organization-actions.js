@@ -1,4 +1,3 @@
-// Keep the existing native forms and confirmations; collect the required reject reason.
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('form[data-referral-action]').forEach(form => {
     form.addEventListener('submit', event => {
@@ -8,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       if (event.submitter?.value === 'reject') {
-        const reason = window.prompt('Reason for rejecting this referral (1 to 255 characters):');
+        const reason = window.prompt('Reason for declining this referral (1 to 255 characters):');
         if (reason === null) {
           event.preventDefault();
           return;
@@ -18,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const alert = document.createElement('div');
           alert.className = 'alert alert-danger';
           alert.setAttribute('role', 'alert');
-          alert.textContent = 'Enter a rejection reason containing 1 to 255 characters.';
+          alert.textContent = 'Enter a reason for declining containing 1 to 255 characters.';
           document.getElementById('page-messages').replaceChildren(alert);
           return;
         }

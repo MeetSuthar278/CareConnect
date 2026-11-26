@@ -8,7 +8,6 @@
     <h1>Reports</h1>
 </div>
 
-<!-- Main numbers -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="box">
@@ -38,7 +37,6 @@
 
 <div class="row g-4">
 
-    <!-- By status -->
     <div class="col-12 col-lg-5">
         <h2>Requests by status</h2>
         <div class="table-box">
@@ -48,7 +46,7 @@
                 </thead>
                 <tbody>
                     {% for row in by_status %}
-                        <tr><td>{{ row.name }}</td><td>{{ row.count }}</td></tr>
+                        <tr><td>{{ row.name | display_label }}</td><td>{{ row.count }}</td></tr>
                     {% else %}<tr><td colspan="2">No requests to report.</td></tr>
                     {% endfor %}
                 </tbody>
@@ -56,7 +54,6 @@
         </div>
     </div>
 
-    <!-- By category -->
     <div class="col-12 col-lg-7">
         <h2>Requests by service category</h2>
         <div class="table-box">

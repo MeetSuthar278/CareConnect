@@ -1,0 +1,149 @@
+{
+  "git_head": "abad5c82c1b33441ec37ec672d629a34a5f82047",
+  "current_totals": {
+    "Academic demonstration": 10,
+    "Application": 150,
+    "Schema/DDL": 25,
+    "Seed INSERT": 20
+  },
+  "current_meaningful_total": 205,
+  "current_full_inventory": 253,
+  "head_totals": {
+    "Academic demonstration": 10,
+    "Application": 122,
+    "Schema/DDL": 21,
+    "Seed INSERT": 20
+  },
+  "head_meaningful_total": 173,
+  "application_operation_totals": {
+    "SELECT": 117,
+    "INSERT": 18,
+    "UPDATE": 15
+  },
+  "comparison_counts": {
+    "same_normalized_application_family_retained": 112,
+    "source_reviewed_modified_application_families": 10,
+    "unmatched_previous_feature_families": 0
+  },
+  "date": "2026-11-25",
+  "verification": {
+    "automated_tests_passed": 109,
+    "coordinator_fixture_requests": 250,
+    "default_pages_traversed": 13,
+    "default_page_size": 20,
+    "mysql_live_preflight": "Unavailable: OperationalError; no schema or data operations applied"
+  },
+  "reviewed_modifications": {
+    "Q051": {
+      "current_query_numbers": [
+        "Q057"
+      ],
+      "review": "Request data remains available; SQL filters/order/limit now precede rendering."
+    },
+    "Q052": {
+      "current_query_numbers": [
+        "Q058"
+      ],
+      "review": "All attempts remain in per-request history; request-scoped lookup replaces list-wide eager history."
+    },
+    "Q054": {
+      "current_query_numbers": [
+        "Q062"
+      ],
+      "review": "Organization state, including rejected application display, is filtered before pagination."
+    },
+    "Q055": {
+      "current_query_numbers": [
+        "Q063"
+      ],
+      "review": "Same service/area data loaded in bulk for current page organization IDs."
+    },
+    "Q056": {
+      "current_query_numbers": [
+        "Q064"
+      ],
+      "review": "Same representative/contact data loaded in bulk for current page organization IDs."
+    },
+    "Q066": {
+      "current_query_numbers": [
+        "Q075"
+      ],
+      "review": "Representative identity now includes latest application status so rejection is distinct from pending approval."
+    },
+    "Q082": {
+      "current_query_numbers": [
+        "Q089"
+      ],
+      "review": "Attendance authorization now excludes unapproved applicants; valid owned attendance behavior remains."
+    },
+    "Q109": {
+      "current_query_numbers": [
+        "Q117"
+      ],
+      "review": "Grouped eligibility replaces N+1 area reads while retaining one-distinct-active-area rule."
+    },
+    "Q118": {
+      "current_query_numbers": [
+        "Q128"
+      ],
+      "review": "Eligible partner names are restricted by bound IDs and loaded on the individual request review."
+    },
+    "Q163": {
+      "current_query_numbers": [
+        "Q189",
+        "Q190"
+      ],
+      "review": "Catalog fields and provider summaries now use page-scoped reads; service details use an ID predicate."
+    }
+  },
+  "audit_modified_existing_files": [
+    "app/coordinator.py",
+    "frontend/templates/coordinator/requests.html",
+    "docs/SUBMISSION_READINESS.md",
+    "tests/test_list_queries.py"
+  ],
+  "audit_deleted_existing_files": [],
+  "unchanged_artifacts": {
+    "all_database_files_and_diagrams": true,
+    "all_messaging_modules": true,
+    "all_business_services": true,
+    "all_frontend_javascript": true,
+    "firebase_configuration_changed": false,
+    "live_data_changed": false
+  },
+  "git_status_counts_including_prior_work": {
+    " M": 68,
+    " D": 41,
+    "??": 48
+  },
+  "historical_coordinator_checkpoints": [
+    "abad5c82c1b33441ec37ec672d629a34a5f82047",
+    "2bb434a",
+    "61e9ce5"
+  ],
+  "original_coordinator_filters": [
+    "status",
+    "priority",
+    "org_id",
+    "attention"
+  ],
+  "previous_category_or_date_controls_found": false,
+  "only_application_correction": "Parameterized coordinator request search before sorting and pagination",
+  "audit_new_files": [
+    "tools/audit_sql_inventory.py",
+    "tests/test_sql_inventory.py",
+    "tests/test_coordinator_preservation.py",
+    "docs/testing/sql_inventory.csv",
+    "docs/testing/sql_inventory.json",
+    "docs/testing/sql_inventory_head.csv",
+    "docs/testing/sql_inventory_head.json",
+    "docs/testing/sql_query_comparison.csv",
+    "docs/testing/database_compliance_review.json"
+  ],
+  "historical_audit": true,
+  "superseded_by": [
+    "docs/testing/FINAL_TEST_REPORT.md",
+    "docs/testing/DATABASE_COMPLIANCE_REPORT.md",
+    "docs/testing/sql_inventory.json"
+  ]
+}

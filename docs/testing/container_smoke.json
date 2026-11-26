@@ -1,0 +1,37 @@
+{
+  "image": "careconnect-submission-test:local",
+  "scope": "Local Gunicorn/non-root/read-only HTTP image smoke; existing MySQL SELECTs only; no auth writes/workers/public deployment",
+  "checks": [
+    {
+      "name": "non-root UID 10001 with read-only root",
+      "status": "PASS"
+    },
+    {
+      "name": "/health HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "name": "/health/db HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "name": "/services HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "name": "/login HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "name": "/team-static/css/style.css HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "name": "/demo/request HTTP 404",
+      "status": "PASS"
+    }
+  ],
+  "image_id": "sha256:59ace3007ac9de774f31e297254a51675d05e7b1b4f269f6b4582563d3da46a4",
+  "status": "PASS",
+  "cleanup": true
+}

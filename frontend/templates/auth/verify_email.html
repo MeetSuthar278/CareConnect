@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Finish registration{% endblock %}
+{% block content %}
+<div id="auth-entry" class="form-box">
+    <h1>Finish registration</h1>
+    <p>Sign in with the email and password you used to register. You can request a new verification link or finish registration after verifying on another device.</p>
+    <form id="registration-recovery-form" class="box">
+        <p class="form-hint">All fields are required.</p>
+        <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input id="email" name="email" type="email" class="form-control" autocomplete="email" maxlength="120" required>
+        </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input id="password" name="password" type="password" class="form-control" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-main">Continue registration</button>
+    </form>
+    <p class="mt-3"><a href="{{ url_for('login') }}">Back to login</a></p>
+</div>
+{% include 'auth/_verification_panel.html' %}
+{% endblock %}
+{% block scripts %}
+<script id="firebase-web-config" type="application/json">{{ firebase_web_config | tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/registration-recovery.js') }}"></script>
+{% endblock %}

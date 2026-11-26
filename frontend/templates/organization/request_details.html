@@ -5,7 +5,7 @@
 
 {% block content %}
 
-<p><a href="{{ url_for('org_requests') }}">&larr; Back to Requests</a></p>
+<p><a href="{{ back_url }}">&larr; Back to Requests</a></p>
 
 <div class="page-title-row">
     <div>
@@ -25,7 +25,7 @@
                 <div class="detail-row"><dt>Assigned service</dt><dd>{{ req.assigned_service_name }}</dd></div>
                 {% endif %}
                 <div class="detail-row">
-                    <dt>Priority</dt>
+                    <dt>Preferred time frame</dt>
                     <dd>{{ priority_deadline(req) }}</dd>
                 </div>
                 <div class="detail-row">
@@ -38,7 +38,7 @@
                 </div>
                 <div class="detail-row">
                     <dt>Sent on</dt>
-                    <dd>{{ req.created_at }}</dd>
+                    <dd>{{ req.created_at | display_time }}</dd>
                 </div>
             </dl>
         </div>
@@ -46,7 +46,7 @@
         <div class="box mt-3">
             <h3>Contact details</h3>
 
-            {# Contact details are shown only after the organization accepts #}
+            {# Contact details are shown only after the organization accepts. #}
             {% if req.status in ['Accepted', 'Completed'] %}
                 <dl class="detail-list">
                     <div class="detail-row"><dt>Name</dt><dd>{{ req.contact_name }}</dd></div>
@@ -68,23 +68,23 @@
             <h3>Update status</h3>
 
             {% if req.status == 'Assigned' and org_active and not req.is_overdue %}
-                <form method="post" action="{{ url_for('org_respond', request_id=req.request_id) }}" data-referral-action>
+                <form method="post" action="{{ url_for('org_respond', request_id=req.request_id, **list_query) }}" data-referral-action>
                     <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
                     <input type="hidden" name="referral_id" value="{{ req.referral_id }}">
-                    <button type="submit" name="action" value="accept" class="btn-main">Accept</button>
+                    <button type="submit" name="action" value="accept" class="btn-main">Accept referral</button>
                     <button type="submit" name="action" value="reject" class="btn-danger-outline"
-                            data-confirm="Reject this referral? A coordinator will review it for reassignment.">Reject</button>
+                            data-confirm="Decline this referral? CareConnect will look for another eligible organization or refer the request to a coordinator.">Decline referral</button>
                 </form>
 
             {% elif req.raw_status == 'accepted' %}
-                <form method="post" action="{{ url_for('org_update_status', request_id=req.request_id) }}" data-referral-action>
+                <form method="post" action="{{ url_for('org_update_status', request_id=req.request_id, **list_query) }}" data-referral-action>
                     <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
                     <input type="hidden" name="referral_id" value="{{ req.referral_id }}">
                     <button type="submit" name="action" value="attend" class="btn-main">Record attendance</button>
                 </form>
 
             {% elif req.raw_status == 'attended' %}
-                <form method="post" action="{{ url_for('org_update_status', request_id=req.request_id) }}" data-referral-action>
+                <form method="post" action="{{ url_for('org_update_status', request_id=req.request_id, **list_query) }}" data-referral-action>
                     <input type="hidden" name="csrf_token" value="{{ organization_csrf }}">
                     <input type="hidden" name="referral_id" value="{{ req.referral_id }}">
                     <p class="text-muted-cc">Click when the person has received the service.</p>

@@ -8,6 +8,10 @@
     <h1>Organization Approvals</h1>
 </div>
 
+<form method="get" action="{{ url_for('coord_approvals') }}" class="mb-3 d-flex gap-2 flex-wrap align-items-end">
+    {% include 'components/list_controls.html' %}
+    <button type="submit" class="btn-outline">Apply sorting</button>
+</form>
 {% if orgs %}
     <div role="region" aria-label="Scrollable data table" tabindex="0" class="table-box table-responsive">
         <table class="table">
@@ -30,7 +34,7 @@
                         <td>{{ o.email }}</td>
                         <td>{{ o.phone }}</td>
                         <td>{{ o.service_area }}</td>
-                        <td>{{ o.created_at }}</td>
+                        <td>{{ o.created_at | display_time }}</td>
                         <td>
                             <form method="post" action="{{ url_for('coord_org_action', org_id=o.org_id) }}" data-application-decision>
                                 <input type="hidden" name="csrf_token" value="{{ coordinator_csrf }}">
@@ -50,6 +54,7 @@
     <div class="note-box">No organizations are waiting for approval.</div>
 {% endif %}
 
+{% include 'components/pagination.html' %}
 {% endblock %}
 
 {% block scripts %}

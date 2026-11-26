@@ -29,8 +29,9 @@ def record_attendance(session, referral_id, user_id):
             FROM organization_representatives rep
             JOIN users u ON u.user_id=rep.user_id
             JOIN roles r ON r.role_id=u.role_id
+            JOIN organizations o ON o.organization_id=rep.organization_id
             WHERE rep.user_id=:user AND u.is_active=TRUE
-              AND r.role_name='representative' FOR UPDATE
+              AND r.role_name='representative' AND o.status<>'pending' FOR UPDATE
         """), {"user": user_id}).mappings().one_or_none()
         if representative is None or representative['organization_id'] != referral.organization_id:
             raise AttendanceError("Referral not found", 404)

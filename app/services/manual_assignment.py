@@ -1,5 +1,5 @@
 """Coordinator rescue of unmatched requests; never replace an active referral."""
-from sqlalchemy import select,text
+from sqlalchemy import bindparam,select,text
 
 from app.models import ServiceRequest,Referral,ReferralStatusHistory
 from app.services.matching import eligible_offerings,create_referral_locked
@@ -21,9 +21,14 @@ def assignment_choices(database,request_id):
     if (len(attempts)>=3 or any(row.status not in {'rejected','timed_out'} for row in attempts)
             or [row.attempt_number for row in attempts]!=list(range(1,len(attempts)+1))):
         return [],0
-    names=dict(database.execute(text('SELECT organization_id,name FROM organizations')).all())
+    eligible=eligible_offerings(database,saved)
+    if not eligible:
+        return [],0
+    names=dict(database.execute(text('SELECT organization_id,name FROM organizations WHERE organization_id IN :ids')
+                                .bindparams(bindparam('ids',expanding=True)),
+                                {'ids':sorted({row.organization_id for row in eligible})}).all())
     choices=[dict(org_id=row.organization_id,org_name=names[row.organization_id])
-             for row in eligible_offerings(database,saved)]
+             for row in eligible]
     return choices,attempts[-1].referral_id if attempts else 0
 
 
