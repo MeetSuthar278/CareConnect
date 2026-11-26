@@ -27,3 +27,9 @@ flowchart LR
 The hosted version runs in Docker on Azure. Caddy provides HTTPS. The database and message broker are not exposed directly to the internet.
 
 See [event architecture](EVENT_DRIVEN_ARCHITECTURE.md) for the seven implemented events.
+
+## System Architecture Diagram
+
+![System Architecture](architecture/SYSTEM_ARCHITECTURE.png)
+
+[Editable Draw.io Diagram](architecture/SYSTEM_ARCHITECTURE.drawio)
