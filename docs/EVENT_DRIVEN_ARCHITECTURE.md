@@ -24,3 +24,9 @@ An event tells the system that something important has happened. RabbitMQ delive
 The durable `careconnect.events` exchange routes messages to five queues. Events may be delivered more than once, so workers check existing records to avoid duplicate effects. Acceptance and completion are direct database actions, not separate RabbitMQ events.
 
 See [workflow test evidence](testing/EVENT_WORKFLOW_TEST_REPORT.md).
+
+## System Architecture Diagram
+
+![System Architecture](architecture/SYSTEM_ARCHITECTURE.png)
+
+[Editable Draw.io Diagram](architecture/SYSTEM_ARCHITECTURE.drawio)
