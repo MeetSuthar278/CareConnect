@@ -27,6 +27,6 @@ See [workflow test evidence](testing/EVENT_WORKFLOW_TEST_REPORT.md).
 
 ## Event-Driven Architecture Diagram
 
-![Event-Driven Architecture](architecture/EVENT_DRIVEN_ARCHITECTURE.jpg)
+![Event-Driven Architecture](events/EVENT_DRIVEN_ARCHITECTURE.jpg)
 
-[Editable Draw.io Diagram](architecture/EVENT_DRIVEN_ARCHITECTURE.drawio)
+[Editable Draw.io Diagram](events/EVENT_DRIVEN_ARCHITECTURE.drawio)
