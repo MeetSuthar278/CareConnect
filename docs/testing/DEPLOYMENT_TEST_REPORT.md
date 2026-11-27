@@ -40,3 +40,9 @@ recovery, resource/load behavior, backup restoration and production Firebase dom
 sign-in. No costs incurred or hosting purchased. Use [DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md)
 and the detailed [hosting runbook](../hosting/HOSTING_RUNBOOK.md) for the approved
 provisioning sequence and remaining checks.
+
+
+
+## Later owner verification — November 26, 2026
+
+The owner confirmed the Azure deployment, HTTPS response, healthy endpoint, five active RabbitMQ consumers and successful login for all three demo roles. These are later owner-reported results, separate from the earlier image smoke test. Full hosted task evidence and actual inbox delivery were not supplied. A non-blocking Gunicorn read-only control-server warning remains for review.
